@@ -1,6 +1,6 @@
-# mcd_for_crispr (MCD UI Launcher)
-Cross-platform tool for running robust MCD-based analysis on CRISPR drug screens using R. This project provides a simple launcher for an interactive R workflow of the Minimum covariance determinant for analysis of large-scale CRISPR knockout screens.
-After cloning or downloading the project folder, run the launcher for their operating system, and interact with the workflow defined in `main.R`.
+# mcd_for_crispr (MCD CLI)
+Command line interface to run robust MCD-based analysis on CRISPR drug screens using R. This project provides a simple cli for an interactive R workflow to perform Minimum covariance determinant analysis of large-scale CRISPR knockout screens.
+After cloning or downloading the project folder, run the launcher for your operating system, and interact with the workflow defined in `main.R`.
 
 ## Requirements
 
@@ -36,8 +36,8 @@ README.md     # instructions
 
 ### Option 2: Clone with git
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/doraaobodo/mcd_for_crispr.git
+cd mcd_for_crispr
 ```
 
 ---
@@ -97,14 +97,14 @@ Rscript main.R
 ## Example Data
 
 An example input file is included in the `data/` folder so users can test the workflow.
-
+This is a MAGECK-MLE results file.
 Example:
 
 ```text
-data/example_input.csv
+data/xiao_2018_mle.csv
 ```
 
-Use this file when prompted by the application.
+Use this file and specify MLE when prompted by the application.
 
 ---
 
@@ -112,7 +112,7 @@ Use this file when prompted by the application.
 
 - The launcher only starts the application
 - All interactive behavior is handled in `main.R`
-- If required R packages are missing, R may prompt you or stop with an error depending on how `main.R` is written
+- If required R packages are missing, R may prompt you or stop with an error.
 
 ---
 
