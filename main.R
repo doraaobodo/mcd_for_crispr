@@ -1,7 +1,7 @@
 ###### HELPERS #######
 
-check_required_packages <- function(pkgs) {
-  missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+check_required_packages = function(pkgs) {
+  missing = pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
   
   if (length(missing) == 0) {
     return(invisible(TRUE))
@@ -21,10 +21,10 @@ check_required_packages <- function(pkgs) {
 }
 
 
-get_script_path <- function() {
-  args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- "--file="
-  idx <- grep(file_arg, args)
+get_script_path = function() {
+  args = commandArgs(trailingOnly = FALSE)
+  file_arg = "--file="
+  idx = grep(file_arg, args)
   
   if (length(idx) > 0) {
     return(normalizePath(sub(file_arg, "", args[idx][1]), winslash = "/", mustWork = TRUE))
@@ -33,8 +33,8 @@ get_script_path <- function() {
   NULL
 }
 
-get_script_dir <- function() {
-  script_path <- get_script_path()
+get_script_dir = function() {
+  script_path = get_script_path()
   if (!is.null(script_path)) {
     return(dirname(script_path))
   }
@@ -42,7 +42,7 @@ get_script_dir <- function() {
 }
 
 # generate a pause for user input in launcher
-pause <- function(prompt_text = "Press Enter to continue...") {
+pause = function(prompt_text = "Press Enter to continue...") {
   if (interactive()) {
     return(invisible(readline(prompt = prompt_text)))
   } else {
@@ -51,27 +51,27 @@ pause <- function(prompt_text = "Press Enter to continue...") {
   }
 }
 
-say_line <- function(char = "=", n = 60) {
+say_line = function(char = "=", n = 60) {
   cat(paste(rep(char, n), collapse = ""), "\n", sep = "")
 }
 
-show_header <- function(title) {
+show_header = function(title) {
   cat("\n")
   say_line("=")
   cat(title, "\n")
   say_line("=")
 }
 
-ask_yes_no <- function(prompt, default = TRUE) {
-  suffix <- if (default) " [Y/n]: " else " [y/N]: "
+ask_yes_no = function(prompt, default = TRUE) {
+  suffix = if (default) " [Y/n]: " else " [y/N]: "
   
   repeat {
     
     if (interactive()) {
-      ans <- trimws(tolower(readline(paste0(prompt, suffix))))
+      ans = trimws(tolower(readline(paste0(prompt, suffix))))
     } else {
       cat(paste0(prompt, suffix))
-      ans <- trimws(tolower(readLines("stdin", n=1)))
+      ans = trimws(tolower(readLines("stdin", n=1)))
     }
     
     if (ans == "") return(default)
@@ -83,20 +83,21 @@ ask_yes_no <- function(prompt, default = TRUE) {
 }
 
 
-choose_input_type <- function() {
+choose_input_type = function() {
   show_header("Select Input Type")
   cat("What type of file are you providing?\n\n")
   cat("  1) Raw counts matrix\n")
   cat("  2) MAGeCK RRA gene summary results\n")
   cat("  3) MAGeCK MLE results\n\n")
   
+  #we want to repeat until we get the right input
   repeat {
     
     if (interactive()) {
-      ans <- trimws(readline("Enter choice number: "))
+      ans = trimws(readline("Enter choice number: "))
     } else {
       cat("Enter choice number: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
 
     if (ans == "1") return("raw_counts")
@@ -108,7 +109,7 @@ choose_input_type <- function() {
 }
 
 
-choose_input_source_mode <- function() {
+choose_input_source_mode = function() {
   show_header("Select Input Source")
   cat("How would you like to provide the input?\n\n")
   cat("  1) Single file (e.g., counts data, MAGECK MLE results for one screen)\n")
@@ -117,10 +118,10 @@ choose_input_source_mode <- function() {
   
   repeat {
     if (interactive()) {
-      ans <- trimws(readline("Enter choice number: "))
+      ans = trimws(readline("Enter choice number: "))
     } else {
       cat("Enter choice number: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
     
     if (ans == "1") return("single")
@@ -130,15 +131,15 @@ choose_input_source_mode <- function() {
   }
 }
 
-choose_input_files <- function(
+choose_input_files = function(
     prompt_text = "Enter full paths separated by commas: ",
     caption = "Select input files"
 ) {
   repeat {
-    selected <- character(0)
+    selected = character(0)
     
     if (.Platform$OS.type == "windows") {
-      selected <- tryCatch(
+      selected = tryCatch(
         utils::choose.files(caption = caption, multi = TRUE),
         error = function(e) character(0)
       )
@@ -150,13 +151,13 @@ choose_input_files <- function(
     
     cat("File chooser unavailable or no files selected.\n")
     if (interactive()) {
-      ans <- trimws(readline(prompt_text))
+      ans = trimws(readline(prompt_text))
     } else {
       cat(prompt_text)
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
-    parts <- trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
-    parts <- path.expand(parts[nzchar(parts)])
+    parts = trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
+    parts = path.expand(parts[nzchar(parts)])
     
     if (length(parts) > 0 && all(file.exists(parts))) {
       return(normalizePath(parts, winslash = "/", mustWork = TRUE))
@@ -166,11 +167,11 @@ choose_input_files <- function(
   }
 }
 
-collect_input_paths <- function() {
-  mode <- choose_input_source_mode()
+collect_input_paths = function() {
+  mode = choose_input_source_mode()
   
   if (mode == "single") {
-    paths <- choose_input_files(
+    paths = choose_input_files(
       prompt_text = "Enter full path to input file: ",
       caption = "Select input file"
     )
@@ -178,21 +179,21 @@ collect_input_paths <- function() {
   }
   
   if (mode == "multiple") {
-    paths <- choose_input_files(
+    paths = choose_input_files(
       prompt_text = "Enter full paths to input files, separated by commas: ",
       caption = "Select input files"
     )
     return(list(mode = mode, paths = paths))
   }
   
-  dir_path <- choose_output_dir(
+  dir_path = choose_output_dir(
     prompt_text = "Enter folder containing input files: ",
     caption = "Select input folder",
     create = FALSE
   )
   
-  files <- list.files(dir_path, full.names = TRUE)
-  files <- files[file.info(files)$isdir %in% FALSE]
+  files = list.files(dir_path, full.names = TRUE)
+  files = files[file.info(files)$isdir %in% FALSE]
   
   if (length(files) == 0) {
     stop("No files were found in the selected directory.")
@@ -202,10 +203,10 @@ collect_input_paths <- function() {
 }
 
 
-load_counts_data <- function(file_path) {
-  ext <- tolower(tools::file_ext(file_path))
+load_counts_data = function(file_path) {
+  ext = tolower(tools::file_ext(file_path))
   
-  dat <- switch(
+  dat = switch(
     ext,
     "csv" = read.csv(file_path, stringsAsFactors = FALSE, check.names = FALSE),
     "tsv" = read.delim(file_path, stringsAsFactors = FALSE, check.names = FALSE),
@@ -216,11 +217,11 @@ load_counts_data <- function(file_path) {
   dat
 }
 
-parse_one_mageck_rra_file <- function(path, metric_col = "neg|lfc", gene_col = "id") {
-  dat <- load_counts_data(path)
+parse_one_mageck_rra_file = function(path, metric_col = "neg|lfc", gene_col = "id") {
+  dat = load_counts_data(path)
   
-  required_cols <- c(gene_col, metric_col)
-  missing_cols <- setdiff(required_cols, colnames(dat))
+  required_cols = c(gene_col, metric_col)
+  missing_cols = setdiff(required_cols, colnames(dat))
   if (length(missing_cols) > 0) {
     stop(
       basename(path),
@@ -229,37 +230,37 @@ parse_one_mageck_rra_file <- function(path, metric_col = "neg|lfc", gene_col = "
     )
   }
   
-  out <- dat[, c(gene_col, metric_col), drop = FALSE]
-  colnames(out) <- c("gene", "score")
-  out$gene <- as.character(out$gene)
+  out = dat[, c(gene_col, metric_col), drop = FALSE]
+  colnames(out) = c("gene", "score")
+  out$gene = as.character(out$gene)
   out
 }
 
-parse_mageck_rra_set <- function(paths, metric_col = "neg|lfc") {
-  score_list <- vector("list", length(paths))
-  sample_names <- character(length(paths))
+parse_mageck_rra_set = function(paths, metric_col = "neg|lfc") {
+  score_list = vector("list", length(paths))
+  sample_names = character(length(paths))
   
   for (i in seq_along(paths)) {
-    path <- paths[i]
-    one <- parse_one_mageck_rra_file(path, metric_col = metric_col)
+    path = paths[i]
+    one = parse_one_mageck_rra_file(path, metric_col = metric_col)
     
-    sample_label <- tools::file_path_sans_ext(basename(path))
+    sample_label = tools::file_path_sans_ext(basename(path))
     sample_label = gsub('.gene_summary|_gene_summary', '', sample_label)
     sample_label = gsub('.rra|_rra', '', sample_label)
     
-    colnames(one)[2] <- sample_label
+    colnames(one)[2] = sample_label
     
-    score_list[[i]] <- one
-    sample_names[i] <- sample_label
+    score_list[[i]] = one
+    sample_names[i] = sample_label
   }
   
-  merged <- Reduce(
+  merged = Reduce(
     function(x, y) merge(x, y, by = "gene", all = TRUE),
     score_list
   )
   
-  rownames(merged) <- merged$gene
-  score_matrix <- merged[, sample_names, drop = FALSE]
+  rownames(merged) = merged$gene
+  score_matrix = merged[, sample_names, drop = FALSE]
   
   list(
     input_type = "mageck_rra",
@@ -271,11 +272,11 @@ parse_mageck_rra_set <- function(paths, metric_col = "neg|lfc") {
   )
 }
 
-parse_one_mageck_mle_file <- function(path) {
-  dat <- load_counts_data(path)
+parse_one_mageck_mle_file = function(path) {
+  dat = load_counts_data(path)
   
-  required_cols <- "Gene"
-  missing_cols <- setdiff(required_cols, colnames(dat))
+  required_cols = "Gene"
+  missing_cols = setdiff(required_cols, colnames(dat))
   if (length(missing_cols) > 0) {
     stop(
       basename(path),
@@ -284,32 +285,32 @@ parse_one_mageck_mle_file <- function(path) {
     )
   }
   
-  z_cols <- grep("\\|z$", colnames(dat), value = TRUE)
+  z_cols = grep("\\|z$", colnames(dat), value = TRUE)
   if (length(z_cols) == 0) {
     stop(basename(path), " has no columns ending in '|z'.")
   }
   
-  out <- dat[, c("Gene", z_cols), drop = FALSE]
-  colnames(out)[1] <- "gene"
-  out$gene <- as.character(out$gene)
+  out = dat[, c("Gene", z_cols), drop = FALSE]
+  colnames(out)[1] = "gene"
+  out$gene = as.character(out$gene)
   
-  file_stub <- tools::file_path_sans_ext(basename(path))
-  new_names <- sub("\\|z$", "", z_cols)
-  colnames(out)[-1] <- new_names
+  file_stub = tools::file_path_sans_ext(basename(path))
+  new_names = sub("\\|z$", "", z_cols)
+  colnames(out)[-1] = new_names
   
   out
 }
 
-parse_mageck_mle_set <- function(paths) {
-  parsed <- lapply(paths, parse_one_mageck_mle_file)
+parse_mageck_mle_set = function(paths) {
+  parsed = lapply(paths, parse_one_mageck_mle_file)
   
-  merged <- Reduce(
+  merged = Reduce(
     function(x, y) merge(x, y, by = "gene", all = TRUE),
     parsed
   )
   
-  rownames(merged) <- merged$gene
-  score_matrix <- merged[, setdiff(colnames(merged), "gene"), drop = FALSE]
+  rownames(merged) = merged$gene
+  score_matrix = merged[, setdiff(colnames(merged), "gene"), drop = FALSE]
   
   list(
     input_type = "mageck_mle",
@@ -321,13 +322,13 @@ parse_mageck_mle_set <- function(paths) {
   )
 }
 
-show_vector_choices <- function(x) {
+show_vector_choices = function(x) {
   for (i in seq_along(x)) {
     cat(sprintf("  %d) %s\n", i, x[i]))
   }
 }
 
-ask_single_column <- function(prompt, choices, allow_skip = FALSE) {
+ask_single_column = function(prompt, choices, allow_skip = FALSE) {
   repeat {
     cat("\n", prompt, "\n", sep = "")
     show_vector_choices(choices)
@@ -337,10 +338,10 @@ ask_single_column <- function(prompt, choices, allow_skip = FALSE) {
     }
     
     if (interactive()) {
-      ans <- trimws(readline("Enter choice number: "))
+      ans = trimws(readline("Enter choice number: "))
     } else {
       cat("Enter choice number: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
     
     if (allow_skip && ans == "0") {
@@ -355,7 +356,7 @@ ask_single_column <- function(prompt, choices, allow_skip = FALSE) {
   }
 }
 
-ask_multiple_columns <- function(prompt, choices) {
+ask_multiple_columns = function(prompt, choices) {
   repeat {
     cat("\n", prompt, "\n", sep = "")
     show_vector_choices(choices)
@@ -363,10 +364,10 @@ ask_multiple_columns <- function(prompt, choices) {
     cat("Example: 3,4,5\n")
     
     if (interactive()) {
-      ans <- trimws(readline("Selection: "))
+      ans = trimws(readline("Selection: "))
     } else {
       cat("Selection: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
     
     if (!nzchar(ans)) {
@@ -374,10 +375,10 @@ ask_multiple_columns <- function(prompt, choices) {
       next
     }
     
-    idx <- trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
+    idx = trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
     
     if (all(idx %in% as.character(seq_along(choices)))) {
-      idx_num <- unique(as.integer(idx))
+      idx_num = unique(as.integer(idx))
       return(choices[idx_num])
     }
     
@@ -385,21 +386,21 @@ ask_multiple_columns <- function(prompt, choices) {
   }
 }
 
-guess_counts_columns <- function(cnts) {
-  nms <- colnames(cnts)
-  low <- tolower(nms)
+guess_counts_columns = function(cnts) {
+  nms = colnames(cnts)
+  low = tolower(nms)
   
-  is_numeric_col <- vapply(cnts, is.numeric, logical(1))
+  is_numeric_col = vapply(cnts, is.numeric, logical(1))
   
-  guide_candidates <- nms[
+  guide_candidates = nms[
     grepl("guide|grna|sgRNA|sgrna|barcode|construct", nms, ignore.case = TRUE)
   ]
   
-  gene_candidates <- nms[
+  gene_candidates = nms[
     grepl("gene|symbol|hgnc|target", nms, ignore.case = TRUE)
   ]
   
-  sample_candidates <- nms[is_numeric_col]
+  sample_candidates = nms[is_numeric_col]
   
   list(
     guide_candidates = unique(guide_candidates),
@@ -408,7 +409,7 @@ guess_counts_columns <- function(cnts) {
   )
 }
 
-preview_column_guesses <- function(guesses) {
+preview_column_guesses = function(guesses) {
   cat("\nDetected likely columns:\n")
   
   cat("\nGuide column candidates:\n")
@@ -435,16 +436,16 @@ preview_column_guesses <- function(guesses) {
   cat("\n")
 }
 
-validate_counts_mapping <- function(cnts, mapping) {
-  required_names <- c("guide_col", "gene_col", "sample_cols")
-  missing_names <- setdiff(required_names, names(mapping))
+validate_counts_mapping = function(cnts, mapping) {
+  required_names = c("guide_col", "gene_col", "sample_cols")
+  missing_names = setdiff(required_names, names(mapping))
   
   if (length(missing_names) > 0) {
     stop("Mapping object is missing required entries: ",
          paste(missing_names, collapse = ", "))
   }
   
-  all_cols <- colnames(cnts)
+  all_cols = colnames(cnts)
   
   if (!mapping$guide_col %in% all_cols) {
     stop("Mapped guide column not found in counts data: ", mapping$guide_col)
@@ -459,7 +460,7 @@ validate_counts_mapping <- function(cnts, mapping) {
   }
   
   if (!all(mapping$sample_cols %in% all_cols)) {
-    bad <- mapping$sample_cols[!mapping$sample_cols %in% all_cols]
+    bad = mapping$sample_cols[!mapping$sample_cols %in% all_cols]
     stop("Mapped sample/count columns not found in counts data: ",
          paste(bad, collapse = ", "))
   }
@@ -468,13 +469,13 @@ validate_counts_mapping <- function(cnts, mapping) {
     stop("Guide column and gene column cannot be the same.")
   }
   
-  overlap <- intersect(c(mapping$guide_col, mapping$gene_col), mapping$sample_cols)
+  overlap = intersect(c(mapping$guide_col, mapping$gene_col), mapping$sample_cols)
   if (length(overlap) > 0) {
     stop("Annotation columns cannot also be sample/count columns: ",
          paste(overlap, collapse = ", "))
   }
   
-  non_numeric_sample_cols <- mapping$sample_cols[
+  non_numeric_sample_cols = mapping$sample_cols[
     !vapply(cnts[mapping$sample_cols], is.numeric, logical(1))
   ]
   
@@ -486,9 +487,9 @@ validate_counts_mapping <- function(cnts, mapping) {
   invisible(TRUE)
 }
 
-extract_mapped_counts <- function(cnts, mapping) {
-  annotation <- cnts[, c(mapping$guide_col, mapping$gene_col), drop = FALSE]
-  counts_mat <- cnts[, mapping$sample_cols, drop = FALSE]
+extract_mapped_counts = function(cnts, mapping) {
+  annotation = cnts[, c(mapping$guide_col, mapping$gene_col), drop = FALSE]
+  counts_mat = cnts[, mapping$sample_cols, drop = FALSE]
   rownames(counts_mat) = cnts[[mapping$guide_col]]
 
   
@@ -498,11 +499,11 @@ extract_mapped_counts <- function(cnts, mapping) {
   )
 }
 
-map_counts_columns <- function(cnts) {
+map_counts_columns = function(cnts) {
   show_header("Map Counts Columns")
   
-  all_cols <- colnames(cnts)
-  guesses <- guess_counts_columns(cnts)
+  all_cols = colnames(cnts)
+  guesses = guess_counts_columns(cnts)
   
   cat("The counts table has the following columns:\n\n")
   show_vector_choices(all_cols)
@@ -510,16 +511,16 @@ map_counts_columns <- function(cnts) {
   
   preview_column_guesses(guesses)
   
-  guide_default <- if (length(guesses$guide_candidates) >= 1) guesses$guide_candidates[1] else NA_character_
-  gene_default  <- if (length(guesses$gene_candidates) >= 1)  guesses$gene_candidates[1]  else NA_character_
-  sample_default <- guesses$sample_candidates
+  guide_default = if (length(guesses$guide_candidates) >= 1) guesses$guide_candidates[1] else NA_character_
+  gene_default  = if (length(guesses$gene_candidates) >= 1)  guesses$gene_candidates[1]  else NA_character_
+  sample_default = guesses$sample_candidates
   
   if (length(sample_default) == 0) {
     cat("No numeric sample/count columns were automatically detected.\n")
     cat("You will need to select them manually.\n")
   }
   
-  use_guess <- FALSE
+  use_guess = FALSE
   if (!is.na(guide_default) || !is.na(gene_default) || length(sample_default) > 0) {
     cat("Proposed mapping:\n")
     cat("  Guide column: ", ifelse(is.na(guide_default), "<none>", guide_default), "\n", sep = "")
@@ -532,35 +533,35 @@ map_counts_columns <- function(cnts) {
     }
     cat("\n")
     
-    use_guess <- ask_yes_no("Use this proposed mapping?", default = TRUE)
+    use_guess = ask_yes_no("Use this proposed mapping?", default = TRUE)
   }
   
   if (use_guess) {
-    guide_col <- guide_default
-    gene_col <- gene_default
-    sample_cols <- sample_default
+    guide_col = guide_default
+    gene_col = gene_default
+    sample_cols = sample_default
   } else {
-    guide_col <- ask_single_column(
+    guide_col = ask_single_column(
       prompt = "Select the guide column:",
       choices = all_cols,
       allow_skip = FALSE
     )
     
-    gene_col <- ask_single_column(
+    gene_col = ask_single_column(
       prompt = "Select the gene column:",
       choices = all_cols,
       allow_skip = FALSE
     )
     
-    remaining_cols <- setdiff(all_cols, unique(c(guide_col, gene_col)))
+    remaining_cols = setdiff(all_cols, unique(c(guide_col, gene_col)))
     
-    sample_cols <- ask_multiple_columns(
+    sample_cols = ask_multiple_columns(
       prompt = "Select the sample/count columns:",
       choices = remaining_cols
     )
   }
   
-  mapping <- list(
+  mapping = list(
     guide_col = guide_col,
     gene_col = gene_col,
     sample_cols = sample_cols
@@ -583,17 +584,17 @@ map_counts_columns <- function(cnts) {
   mapping
 }
 
-validate_sample_metadata_alignment <- function(sample_names, meta) {
-  required_col <- "sample"
+validate_sample_metadata_alignment = function(sample_names, meta) {
+  required_col = "sample"
   
   if (!required_col %in% colnames(meta)) {
     stop("Metadata must contain a 'sample' column.")
   }
   
-  meta_samples <- as.character(meta$sample)
+  meta_samples = as.character(meta$sample)
   
-  missing_in_meta <- setdiff(sample_names, meta_samples)
-  missing_in_counts <- setdiff(meta_samples, sample_names)
+  missing_in_meta = setdiff(sample_names, meta_samples)
+  missing_in_counts = setdiff(meta_samples, sample_names)
   
   if (length(missing_in_meta) > 0) {
     stop(
@@ -612,9 +613,9 @@ validate_sample_metadata_alignment <- function(sample_names, meta) {
   invisible(TRUE)
 }
 
-align_metadata_to_samples <- function(sample_names, meta) {
-  meta <- as.data.frame(meta, stringsAsFactors = FALSE)
-  idx <- match(sample_names, meta$sample)
+align_metadata_to_samples = function(sample_names, meta) {
+  meta = as.data.frame(meta, stringsAsFactors = FALSE)
+  idx = match(sample_names, meta$sample)
   
   if (any(is.na(idx))) {
     stop("Could not align metadata to sample names.")
@@ -623,8 +624,8 @@ align_metadata_to_samples <- function(sample_names, meta) {
   meta[idx, , drop = FALSE]
 }
 
-aggregate_raw_counts_to_gene <- function(parsed_raw, aggregation_fun = c("sum", "mean", "median")) {
-  aggregation_fun <- match.arg(aggregation_fun)
+aggregate_raw_counts_to_gene = function(parsed_raw, aggregation_fun = c("sum", "mean", "median", "none")) {
+  aggregation_fun = match.arg(aggregation_fun)
   
   if (is.null(parsed_raw$annotation) || is.null(parsed_raw$counts_matrix)) {
     stop("parsed_raw must contain 'annotation' and 'counts_matrix'.")
@@ -632,43 +633,45 @@ aggregate_raw_counts_to_gene <- function(parsed_raw, aggregation_fun = c("sum", 
   
   mapping = parsed_raw$mapping
   gene_col = mapping$gene_col
-  ann <- parsed_raw$annotation
-  cnt <- parsed_raw$counts_matrix
+  ann = parsed_raw$annotation
+  cnt = parsed_raw$counts_matrix
   
   if (ncol(ann) < 2) {
     stop("Annotation must contain at least guide and gene columns.")
   }
   
-  genes <- as.character(parsed_raw$annotation[[gene_col]])
+  genes = as.character(parsed_raw$annotation[[gene_col]])
   
   if (any(is.na(genes)) || any(trimws(genes) == "")) {
     stop("Gene column contains missing or empty values.")
   }
   
   # TODO: split by finding gene name in sgrna col
-  split_idx <- split(seq_len(nrow(cnt)), genes)
+  split_idx = split(seq_len(nrow(cnt)), genes)
   
-  agg_list <- lapply(split_idx, function(i) {
-    block <- cnt[i, , drop = FALSE]
+  agg_list = lapply(split_idx, function(i) {
+    block = cnt[i, , drop = FALSE]
     
     if (aggregation_fun == "sum") {
       colSums(block, na.rm = TRUE)
     } else if (aggregation_fun == "mean") {
       colMeans(block, na.rm = TRUE)
-    } else {
+    } else if (aggregation_fun == "median"){
       apply(block, 2, median, na.rm = TRUE)
+    } else{
+      block
     }
   })
   
-  gene_mat <- do.call(rbind, agg_list)
-  gene_mat <- as.data.frame(gene_mat, check.names = FALSE)
-  gene_mat$gene <- rownames(gene_mat)
-  rownames(gene_mat) <- NULL
+  gene_mat = do.call(rbind, agg_list)
+  gene_mat = as.data.frame(gene_mat, check.names = FALSE)
+  gene_mat$gene = rownames(gene_mat)
+  rownames(gene_mat) = NULL
   
-  gene_data <- gene_mat["gene"]
-  score_matrix <- gene_mat[, setdiff(colnames(gene_mat), "gene"), drop = FALSE]
+  gene_data = gene_mat["gene"]
+  score_matrix = gene_mat[, setdiff(colnames(gene_mat), "gene"), drop = FALSE]
   
-  rownames(score_matrix) <- gene_data$gene
+  rownames(score_matrix) = gene_data$gene
   
   list(
     gene_data = gene_data,
@@ -676,40 +679,40 @@ aggregate_raw_counts_to_gene <- function(parsed_raw, aggregation_fun = c("sum", 
   )
 }
 
-normalize_gene_counts <- function(score_matrix, method = c("log2", "cpm_log2", "none")) {
-  method <- match.arg(method)
+normalize_gene_counts = function(score_matrix, method = c("log2", "cpm_log2", "none")) {
+  method = match.arg(method)
   
-  mat <- as.matrix(score_matrix)
-  storage.mode(mat) <- "numeric"
+  mat = as.matrix(score_matrix)
+  storage.mode(mat) = "numeric"
   
   if (method == "none") {
     return(as.data.frame(mat, check.names = FALSE))
   }
   
   if (method == "log2") {
-    mat <- log2(mat + 1)
+    mat = log2(mat + 1)
     return(as.data.frame(mat, check.names = FALSE))
   }
   
-  lib_sizes <- colSums(mat, na.rm = TRUE)
+  lib_sizes = colSums(mat, na.rm = TRUE)
   
   if (any(lib_sizes == 0)) {
     stop("One or more sample columns have total count zero; cannot compute CPM normalization.")
   }
   
-  mat <- sweep(mat, 2, lib_sizes / 1e6, FUN = "/")
-  mat <- log2(mat + 1)
+  mat = sweep(mat, 2, lib_sizes / 1e6, FUN = "/")
+  mat = log2(mat + 1)
   
   as.data.frame(mat, check.names = FALSE)
 }
 
-standardize_columns_to_z <- function(score_matrix) {
-  mat <- as.matrix(score_matrix)
-  storage.mode(mat) <- "numeric"
+standardize_columns_to_z = function(score_matrix) {
+  mat = as.matrix(score_matrix)
+  storage.mode(mat) = "numeric"
   
-  zmat <- apply(mat, 2, function(x) {
-    s <- stats::sd(x, na.rm = TRUE)
-    m <- mean(x, na.rm = TRUE)
+  zmat = apply(mat, 2, function(x) {
+    s = stats::sd(x, na.rm = TRUE)
+    m = mean(x, na.rm = TRUE)
     
     if (is.na(s) || s == 0) {
       rep(0, length(x))
@@ -718,48 +721,48 @@ standardize_columns_to_z <- function(score_matrix) {
     }
   })
   
-  zmat <- as.matrix(zmat)
-  rownames(zmat) <- rownames(mat)
+  zmat = as.matrix(zmat)
+  rownames(zmat) = rownames(mat)
   
   as.data.frame(zmat, check.names = FALSE)
 }
 
-build_gene_score_matrix_from_raw_counts <- function(
+build_gene_score_matrix_from_raw_counts = function(
     parsed_raw,
     meta,
-    aggregation_fun = c("sum", "mean", "median"),
+    aggregation_fun = c("sum", "mean", "median", "none"),
     normalize_method = c("cpm_log2", "log2", "none"),
     make_z = TRUE
 ) {
-  aggregation_fun <- match.arg(aggregation_fun)
-  normalize_method <- match.arg(normalize_method)
+  aggregation_fun = match.arg(aggregation_fun)
+  normalize_method = match.arg(normalize_method)
   
   if (is.null(parsed_raw$sample_names)) {
     stop("parsed_raw must contain 'sample_names'.")
   }
   
   validate_sample_metadata_alignment(parsed_raw$sample_names, meta)
-  meta_aligned <- align_metadata_to_samples(parsed_raw$sample_names, meta)
+  meta_aligned = align_metadata_to_samples(parsed_raw$sample_names, meta)
   
-  aggregated <- aggregate_raw_counts_to_gene(
+  aggregated = aggregate_raw_counts_to_gene(
     parsed_raw = parsed_raw,
     aggregation_fun = aggregation_fun
   )
   
-  norm_scores <- normalize_gene_counts(
+  norm_scores = normalize_gene_counts(
     score_matrix = aggregated$score_matrix,
     method = normalize_method
   )
   
-  rownames(norm_scores) <- aggregated$gene_data$gene
+  rownames(norm_scores) = aggregated$gene_data$gene
   
   if (make_z) {
-    final_scores <- standardize_columns_to_z(norm_scores)
+    final_scores = standardize_columns_to_z(norm_scores)
   } else {
-    final_scores <- norm_scores
+    final_scores = norm_scores
   }
   
-  rownames(final_scores) <- aggregated$gene_data$gene
+  rownames(final_scores) = aggregated$gene_data$gene
   
   list(
     input_type = "raw_counts",
@@ -780,7 +783,7 @@ build_gene_score_matrix_from_raw_counts <- function(
   )
 }
 
-choose_raw_count_processing_options <- function() {
+choose_raw_count_processing_options = function() {
   show_header("Raw Count Processing Options")
   
   cat("Choose how guide-level raw counts should be converted to gene-level scores.\n\n")
@@ -788,30 +791,36 @@ choose_raw_count_processing_options <- function() {
   cat("Aggregation method:\n")
   cat("  1) Sum guide counts within each gene\n")
   cat("  2) Mean guide counts within each gene\n")
-  cat("  3) Median guide counts within each gene\n\n")
+  cat("  3) Median guide counts within each gene\n")
+  cat("  4) No aggregation\n\n")
   
   repeat {
     
     if (interactive()) {
-      ans <- trimws(readline("Choose aggregation method [1]: "))
+      ans = trimws(readline("Choose aggregation method [1]: "))
     } else {
       cat("Choose aggregation method [1]: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
     
     if (ans == "" || ans == "1") {
-      aggregation_fun <- "sum"
+      aggregation_fun = "sum"
       break
     }
     if (ans == "2") {
-      aggregation_fun <- "mean"
+      aggregation_fun = "mean"
       break
     }
     if (ans == "3") {
-      aggregation_fun <- "median"
+      aggregation_fun = "median"
       break
     }
-    cat("Invalid choice. Please enter 1, 2, or 3.\n")
+    if (ans == "4") {
+      aggregation_fun = "none"
+      break
+    }
+    
+    cat("Invalid choice. Please enter 1, 2, 3, or 4.\n")
   }
   
   cat("\nNormalization method:\n")
@@ -822,28 +831,28 @@ choose_raw_count_processing_options <- function() {
   repeat {
     
     if (interactive()) {
-      ans <- trimws(readline("Choose normalization method [1]: "))
+      ans = trimws(readline("Choose normalization method [1]: "))
     } else {
       cat("Choose normalization method [1]: ")
-      ans <- trimws(readLines("stdin", n=1))
+      ans = trimws(readLines("stdin", n=1))
     }
     
     if (ans == "" || ans == "1") {
-      normalize_method <- "cpm_log2"
+      normalize_method = "cpm_log2"
       break
     }
     if (ans == "2") {
-      normalize_method <- "log2"
+      normalize_method = "log2"
       break
     }
     if (ans == "3") {
-      normalize_method <- "none"
+      normalize_method = "none"
       break
     }
     cat("Invalid choice. Please enter 1, 2, or 3.\n")
   }
   
-  make_z <- ask_yes_no(
+  make_z = ask_yes_no(
     "Convert normalized gene-level values to Z-scores across genes within each sample?",
     default = TRUE
   )
@@ -855,10 +864,10 @@ choose_raw_count_processing_options <- function() {
   )
 }
 
-parse_raw_counts_set <- function(path) {
-  dat <- load_counts_data(path)
-  mapping <- map_counts_columns(dat)
-  mapped <- extract_mapped_counts(dat, mapping)
+parse_raw_counts_set = function(path) {
+  dat = load_counts_data(path)
+  mapping = map_counts_columns(dat)
+  mapped = extract_mapped_counts(dat, mapping)
   
   list(
     input_type = "raw_counts",
@@ -870,7 +879,7 @@ parse_raw_counts_set <- function(path) {
   )
 }
 
-parse_input_set <- function(input_type, paths) {
+parse_input_set = function(input_type, paths) {
   if (input_type == "raw_counts") {
     if (length(paths) != 1) {
       stop("Raw counts input currently expects exactly one file.")
@@ -889,7 +898,7 @@ parse_input_set <- function(input_type, paths) {
   stop("Unsupported input type: ", input_type)
 }
 
-show_standardized_matrix_summary <- function(parsed_input) {
+show_standardized_matrix_summary = function(parsed_input) {
   show_header("Standardized Matrix Summary")
   
   if (!is.null(parsed_input$score_matrix)) {
@@ -911,7 +920,7 @@ show_standardized_matrix_summary <- function(parsed_input) {
   }
 }
 
-show_final_score_matrix_summary <- function(final_input) {
+show_final_score_matrix_summary = function(final_input) {
   show_header("Final Gene Score Matrix Summary")
   
   cat("Input type: ", final_input$input_type, "\n", sep = "")
@@ -924,22 +933,22 @@ show_final_score_matrix_summary <- function(final_input) {
   cat("\n")
 }
 
-split_sample_tokens <- function(sample_name) {
-  tokens <- unlist(strsplit(sample_name, "[-_.]+", perl = TRUE))
-  tokens <- tokens[nzchar(tokens)]
+split_sample_tokens = function(sample_name) {
+  tokens = unlist(strsplit(sample_name, "[-_.]+", perl = TRUE))
+  tokens = tokens[nzchar(tokens)]
   tokens
 }
 
-clean_token_core <- function(token) {
+clean_token_core = function(token) {
   sub("\\d+$", "", token)
 }
 
-detect_treatment_type <- function(treatment) {
+detect_treatment_type = function(treatment) {
   if (is.na(treatment) || !nzchar(treatment)) {
     return(NA_character_)
   }
   
-  trt <- toupper(treatment)
+  trt = toupper(treatment)
   if (trt %in% c("DMSO", "CTRL", "CONTROL", "UNTREATED", "VEHICLE", "PBS")) {
     return("control")
   }
@@ -947,11 +956,11 @@ detect_treatment_type <- function(treatment) {
   "treatment"
 }
 
-parse_sample_name <- function(sample_name) {
-  tokens <- split_sample_tokens(sample_name)
-  tok_upper <- toupper(tokens)
+parse_sample_name = function(sample_name) {
+  tokens = split_sample_tokens(sample_name)
+  tok_upper = toupper(tokens)
   
-  out <- list(
+  out = list(
     sample = sample_name,
     cell_line = NA_character_,
     treatment = NA_character_,
@@ -964,50 +973,52 @@ parse_sample_name <- function(sample_name) {
     return(out)
   }
   
-  time_idx <- grep("^(T|TP|D|DAY|TIME|TIMEPOINT).*$", tok_upper)
+  time_idx = grep("^(T|TP|D|DAY|TIME|TIMEPOINT).*$", tok_upper)
   if (length(time_idx) > 0) {
-    out$timepoint <- tokens[time_idx[1]]
+    out$timepoint = tokens[time_idx[1]]
+    time_idx = time_idx[1]
   }
   
-  rep_idx <- grep("^(REP|R|REPLICATE).*$", tok_upper)
+  rep_idx = grep("^(REP|R|REPLICATE).*$", tok_upper)
   if (length(rep_idx) > 0) {
-    out$rep <- suppressWarnings(
+    out$rep = suppressWarnings(
       as.integer(sub("^(REP|R|REPLICATE)", "", tok_upper[rep_idx[1]]))
     )
+    rep_idx=rep_idx[1]
   }
   
   if (length(tokens) >= 2) {
-    out$cell_line <- tokens[1]
+    out$cell_line = tokens[1]
   } else {
-    out$cell_line <- tokens[1]
+    out$cell_line = tokens[1]
   }
   
-  remaining_idx <- seq_along(tokens)
-  remaining_idx <- setdiff(remaining_idx, c(time_idx, rep_idx))
+  remaining_idx = seq_along(tokens)
+  remaining_idx = setdiff(remaining_idx, c(time_idx, rep_idx))
   
   if (length(tokens) >= 2) {
-    remaining_idx <- setdiff(remaining_idx, 1)
+    remaining_idx = setdiff(remaining_idx, 1)
   }
   
   if (length(remaining_idx) > 0) {
-    trt_tok <- tokens[remaining_idx[length(remaining_idx)]]
-    trt_core <- clean_token_core(trt_tok)
-    out$treatment <- toupper(trt_core)
+    trt_tok = tokens[remaining_idx[length(remaining_idx)]]
+    trt_core = clean_token_core(trt_tok)
+    out$treatment = toupper(trt_core)
     
     if (is.na(out$rep) && grepl("\\d+$", trt_tok)) {
-      out$rep <- suppressWarnings(as.integer(sub("^.*?(\\d+)$", "\\1", trt_tok)))
+      out$rep = suppressWarnings(as.integer(sub("^.*?(\\d+)$", "\\1", trt_tok)))
     }
   }
   
-  out$treatment_type <- detect_treatment_type(out$treatment)
+  out$treatment_type = detect_treatment_type(out$treatment)
   
   out
 }
 
-autodetect_metadata_from_samples <- function(sample_names) {
-  parsed <- lapply(sample_names, parse_sample_name)
+autodetect_metadata_from_samples = function(sample_names) {
+  parsed = lapply(sample_names, parse_sample_name)
   
-  meta <- data.frame(
+  meta = data.frame(
     sample = vapply(parsed, function(x) x$sample, character(1)),
     cell_line = vapply(parsed, function(x) x$cell_line, character(1)),
     treatment = vapply(parsed, function(x) x$treatment, character(1)),
@@ -1019,9 +1030,9 @@ autodetect_metadata_from_samples <- function(sample_names) {
     stringsAsFactors = FALSE
   )
   
-  meta[] <- lapply(meta, function(col) {
+  meta[] = lapply(meta, function(col) {
     if (is.character(col)) {
-      col[trimws(col) == ""] <- NA_character_
+      col[trimws(col) == ""] = NA_character_
     }
     col
   })
@@ -1029,7 +1040,7 @@ autodetect_metadata_from_samples <- function(sample_names) {
   meta
 }
 
-edit_metadata_interactively <- function(meta) {
+edit_metadata_interactively = function(meta) {
   show_header("Metadata Preview")
   cat("Metadata inferred from sample names looks like:\n\n")
   print(meta)
@@ -1038,7 +1049,7 @@ edit_metadata_interactively <- function(meta) {
   
   pause("Press Enter to open the metadata editor...")
   
-  edited <- utils::edit(meta)
+  edited = utils::edit(meta)
   
   if (is.null(edited)) {
     stop("Metadata editing was cancelled.")
@@ -1047,9 +1058,9 @@ edit_metadata_interactively <- function(meta) {
   as.data.frame(edited, stringsAsFactors = FALSE)
 }
 
-validate_metadata <- function(meta) {
-  required_cols <- c("sample", "cell_line", "treatment", "treatment_type", "rep", "timepoint")
-  missing_cols <- setdiff(required_cols, colnames(meta))
+validate_metadata = function(meta) {
+  required_cols = c("sample", "cell_line", "treatment", "treatment_type", "rep", "timepoint")
+  missing_cols = setdiff(required_cols, colnames(meta))
   
   if (length(missing_cols) > 0) {
     stop(
@@ -1058,9 +1069,9 @@ validate_metadata <- function(meta) {
     )
   }
   
-  required_nonempty <- c("sample", "cell_line", "treatment", "treatment_type")
+  required_nonempty = c("sample", "cell_line", "treatment", "treatment_type")
   
-  empty_required <- vapply(
+  empty_required = vapply(
     required_nonempty,
     function(col) any(is.na(meta[[col]]) | trimws(as.character(meta[[col]])) == ""),
     logical(1)
@@ -1075,16 +1086,16 @@ validate_metadata <- function(meta) {
   
   invisible(TRUE)
 }
-choose_output_dir <- function(
+choose_output_dir = function(
     prompt_text = "Enter full path to output directory: ",
     caption = "Select output directory",
     create = TRUE
 ) {
   repeat {
-    selected <- NULL
+    selected = NULL
     
     if (.Platform$OS.type == "windows") {
-      selected <- tryCatch(
+      selected = tryCatch(
         utils::choose.dir(caption = caption),
         error = function(e) NA_character_
       )
@@ -1097,13 +1108,13 @@ choose_output_dir <- function(
     cat("Directory chooser unavailable or no folder selected.\n")
     
     if (interactive()) {
-      path <- trimws(readline(prompt_text))
+      path = trimws(readline(prompt_text))
     } else {
       cat(prompt_text)
-      path <- trimws(readLines("stdin", n=1))
+      path = trimws(readLines("stdin", n=1))
     }
         
-    path <- path.expand(path)
+    path = path.expand(path)
     
     if (dir.exists(path)) {
       return(normalizePath(path, winslash = "/", mustWork = TRUE))
@@ -1111,7 +1122,7 @@ choose_output_dir <- function(
     
     if (create) {
       if (ask_yes_no("Directory does not exist. Create it?", default = TRUE)) {
-        ok <- dir.create(path, recursive = TRUE, showWarnings = FALSE)
+        ok = dir.create(path, recursive = TRUE, showWarnings = FALSE)
         if (ok && dir.exists(path)) {
           return(normalizePath(path, winslash = "/", mustWork = TRUE))
         }
@@ -1123,23 +1134,30 @@ choose_output_dir <- function(
 }
 ###### CLI #############
 
-main <- function() {
+source("run_mcd.R")
+
+main = function() {
   
-  check_required_packages(c("tools", "utils"))
+  check_required_packages(c("tools", "utils", "robustbase", "fdrtool"))
+  library(tools)
+  library(utils)
+  library(robustbase)
+  library(fdrtool)
   
-  # script_dir <- get_script_dir()
+  
+  # script_dir = get_script_dir()
   
   show_header("CRISPR Drug Screen MCD UI")
   cat("Welcome. ")
   cat("This tool will guide you through loading counts data,\n")
-  cat("reviewing metadata, and preparing for MCD analysis.\n\n")
+  cat("reviewing metadata, and running an MCD analysis on CRISPR data.\n\n")
   cat("R version: ", R.version.string, "\n", sep = "")
   cat("OS: ", Sys.info()[["sysname"]], "\n", sep = "")
   
-  input_type <- choose_input_type()
-  input_src <- collect_input_paths()
+  input_type = choose_input_type()
+  input_src = collect_input_paths()
 
-  parsed_input <- tryCatch(
+  parsed_input = tryCatch(
     parse_input_set(input_type, input_src$paths),
     error = function(e) {
       show_header("Input Parsing Error")
@@ -1149,11 +1167,12 @@ main <- function() {
     }
   )
 
+  
   if (input_type != "raw_counts") {
     show_standardized_matrix_summary(parsed_input)
   }
 
-  meta <- autodetect_metadata_from_samples(parsed_input$sample_names)
+  meta = autodetect_metadata_from_samples(parsed_input$sample_names)
   
   show_header("Autodetect Metadata")
   cat("Metadata inferred from sample or condition names:\n\n")
@@ -1161,7 +1180,7 @@ main <- function() {
   cat("\n")
   
   if (ask_yes_no("Would you like to edit the metadata table now?", default = TRUE)) {
-    meta <- tryCatch(
+    meta = tryCatch(
       edit_metadata_interactively(meta),
       error = function(e) {
         cat("Error during metadata editing:\n")
@@ -1184,9 +1203,9 @@ main <- function() {
   
   if (input_type == "raw_counts") {
   
-    raw_opts <- choose_raw_count_processing_options()
+    raw_opts = choose_raw_count_processing_options()
   
-    final_input <- tryCatch(
+    final_input = tryCatch(
       build_gene_score_matrix_from_raw_counts(
         parsed_raw = parsed_input,
         meta = meta,
@@ -1204,9 +1223,9 @@ main <- function() {
   
   } else {
   
-    final_input <- parsed_input
+    final_input = parsed_input
   
-    final_input$metadata <- tryCatch(
+    final_input$metadata = tryCatch(
       align_metadata_to_samples(final_input$sample_names, meta),
       error = function(e) {
         show_header("Metadata Alignment Error")
@@ -1219,7 +1238,7 @@ main <- function() {
   
   show_final_score_matrix_summary(final_input)
   
-  out_dir <- choose_output_dir(
+  out_dir = choose_output_dir(
     prompt_text = "Enter full path to output directory: ",
     caption = "Select output directory",
     create = TRUE
@@ -1238,19 +1257,30 @@ main <- function() {
   cat(paste0(" - ", final_input$sample_names), sep = "\n")
   cat("\n")
 
-  # if (!ask_yes_no("Proceed with MCD analysis?", default = TRUE)) {
-  #   cat("Operation cancelled by user.\n")
-  #   pause("Press Enter to exit...")
-  #   quit(status = 0)
-  # }
-  # 
-  # show_header("Running MCD Analysis")
+  if (!ask_yes_no("Proceed with MCD analysis?", default = TRUE)) {
+    cat("Operation cancelled by user.\n")
+    pause("Press Enter to exit...")
+    quit(status = 0)
+  }
+
+  show_header("Running MCD Analysis")
   # cat("This is where your MCD workflow will run.\n")
-  # cat("Rows (genes): ", nrow(final_input$score_matrix), "\n", sep = "")
-  # cat("Conditions: ", ncol(final_input$score_matrix), "\n\n", sep = "")
-  # 
-  # write.csv(final_input$metadata, file.path(out_dir, "edited_metadata.csv"), row.names = FALSE)
-  # write.csv(final_input$score_matrix, file.path(out_dir, "gene_score_matrix.csv"), row.names = TRUE)
+  cat("Rows (genes): ", nrow(final_input$score_matrix), "\n", sep = "")
+  cat("Conditions: ", ncol(final_input$score_matrix), "\n\n", sep = "")
+
+  res = run_mcd_pipeline(
+    final_input = final_input,
+    out_dir = out_dir)
+  
+  # add excel file
+  
+  
+  
+  write.csv(final_input$metadata, file.path(out_dir, "edited_metadata.csv"), row.names = FALSE)
+  write.csv(final_input$score_matrix, file.path(out_dir, "gene_score_matrix.csv"), row.names = TRUE)
+  write.csv(res$out_df, file.path(out_dir, "mcd_res.csv"), row.names = TRUE)
+  
+  
   # 
   # show_header("Complete")
   # cat("Analysis setup completed successfully.\n")

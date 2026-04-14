@@ -37,7 +37,7 @@ if not errorlevel 1 (
 :: Newest version first
 :: ------------------------------------------
 
-call :find_latest_rscript "C:\Program Files\R"
+call :find_latest_rscript "C:\Program Files\R\"
 if defined RSCRIPT_EXE goto :run
 
 call :find_latest_rscript "C:\Program Files (x86)\R"
@@ -62,6 +62,7 @@ echo MCD UI Launcher
 echo ==========================================
 echo Using R at:
 echo %RSCRIPT_EXE%
+echo %RGUI_EXE%
 echo.
 echo Running script:
 echo %MAIN_R%
@@ -92,6 +93,7 @@ if not exist "%R_ROOT%" goto :eof
 for /f "delims=" %%I in ('dir /b /ad /o-n "%R_ROOT%\R-*" 2^>nul') do (
     if exist "%R_ROOT%\%%I\bin\Rscript.exe" (
         set "RSCRIPT_EXE=%R_ROOT%\%%I\bin\Rscript.exe"
+	set "RGUI_EXE=%R_ROOT%\%%I\bin\x64\Rgui.exe
         goto :eof
     )
     if exist "%R_ROOT%\%%I\bin\x64\Rscript.exe" (
