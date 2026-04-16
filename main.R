@@ -1,129 +1,99 @@
-###### HELPERS #######
+###############################################################################
+# main.R
+# CLI for CRISPR Drug Screen MCD analysis
+###############################################################################
+
+###############################################################################
+# Dependencies and setup
+###############################################################################
+
+source("run_mcd.R")
 
 check_required_packages = function(pkgs) {
   missing = pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
-  
+
   if (length(missing) == 0) {
     return(invisible(TRUE))
   }
-  
+
   show_header("Missing Required Packages")
   cat("The following packages are required but not installed:\n")
   for (pkg in missing) cat(" - ", pkg, "\n", sep = "")
-  
+
   cat("\nInstall them in R with:\n")
-  cat(sprintf('install.packages(c(%s))\n',
-              paste(sprintf('"%s"', missing), collapse = ", ")))
+  cat(sprintf(
+    'install.packages(c(%s))\n',
+    paste(sprintf('"%s"', missing), collapse = ", ")
+  ))
   cat("\n")
-  
-  pause("Press [Enter] to exit...")
+
+  invisible(read_cli_input("Press [Enter] to exit..."))
   quit(status = 1)
 }
 
+###############################################################################
+# Console and CLI utilities
+###############################################################################
 
-get_script_path = function() {
-  args = commandArgs(trailingOnly = FALSE)
-  file_arg = "--file="
-  idx = grep(file_arg, args)
-  
-  if (length(idx) > 0) {
-    return(normalizePath(sub(file_arg, "", args[idx][1]), winslash = "/", mustWork = TRUE))
-  }
-  
-  NULL
-}
-
-get_script_dir = function() {
-  script_path = get_script_path()
-  if (!is.null(script_path)) {
-    return(dirname(script_path))
-  }
-  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-}
-
-# generate a pause for user input in launcher
-pause = function(prompt_text = "Press Enter to continue...") {
-  if (interactive()) {
-    return(invisible(readline(prompt = prompt_text)))
+read_cli_input = function(prompt_text, lowercase = FALSE) {
+  ans = if (interactive()) {
+    readline(prompt = prompt_text)
   } else {
     cat(prompt_text)
-    return(invisible(readLines("stdin", n = 1)))
+    readLines("stdin", n = 1)
   }
-}
 
-say_line = function(char = "=", n = 60) {
-  cat(paste(rep(char, n), collapse = ""), "\n", sep = "")
+  ans = trimws(ans)
+  if (lowercase) {
+    ans = tolower(ans)
+  }
+  ans
 }
 
 show_header = function(title) {
   cat("\n")
-  say_line("=")
+  cat(paste(rep("=", 60), collapse = ""), "\n", sep = "")
   cat(title, "\n")
-  say_line("=")
+  cat(paste(rep("=", 60), collapse = ""), "\n", sep = "")
+}
+
+run_or_exit = function(expr, title = "Error") {
+  tryCatch(
+    expr,
+    error = function(e) {
+      show_header(title)
+      cat(conditionMessage(e), "\n")
+      invisible(read_cli_input("Press Enter to exit..."))
+      quit(status = 1)
+    }
+  )
 }
 
 ask_yes_no = function(prompt, default = TRUE) {
   suffix = if (default) " [Y/n]: " else " [y/N]: "
-  
+
   repeat {
-    
-    if (interactive()) {
-      ans = trimws(tolower(readline(paste0(prompt, suffix))))
-    } else {
-      cat(paste0(prompt, suffix))
-      ans = trimws(tolower(readLines("stdin", n=1)))
-    }
-    
+    ans = read_cli_input(paste0(prompt, suffix), lowercase = TRUE)
     if (ans == "") return(default)
     if (ans %in% c("y", "yes")) return(TRUE)
     if (ans %in% c("n", "no")) return(FALSE)
-    
     cat("Please enter y or n.\n")
   }
 }
 
-
-choose_input_type = function() {
-  show_header("Select Input Type")
-  cat("What type of file are you providing?\n\n")
-  cat("  1) Raw counts matrix\n")
-  cat("  2) MAGeCK RRA gene summary results\n")
-  cat("  3) MAGeCK MLE results\n\n")
-  
-  #we want to repeat until we get the right input
-  repeat {
-    
-    if (interactive()) {
-      ans = trimws(readline("Enter choice number: "))
-    } else {
-      cat("Enter choice number: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-
-    if (ans == "1") return("raw_counts")
-    if (ans == "2") return("mageck_rra")
-    if (ans == "3") return("mageck_mle")
-    
-    cat("Invalid choice. Please enter 1, 2, or 3.\n")
-  }
-}
-
+###############################################################################
+# File and path utilities
+###############################################################################
 
 choose_input_source_mode = function() {
   show_header("Select Input Source")
   cat("How would you like to provide the input?\n\n")
-  cat("  1) Single file (e.g., counts data, MAGECK MLE results for one screen)\n")
-  cat("  2) Multiple files (e.g., MAGeCK RRA/MLE gene summary results for multiple screens)\n")
-  cat("  3) Folder containing files (e.g., folder containing only results files \n with the same structure \n\n")
-  
+  cat("  1) Single file\n")
+  cat("  2) Multiple files\n")
+  cat("  3) Folder containing files\n\n")
+
   repeat {
-    if (interactive()) {
-      ans = trimws(readline("Enter choice number: "))
-    } else {
-      cat("Enter choice number: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-    
+    ans = read_cli_input("Enter choice number: ")
     if (ans == "1") return("single")
     if (ans == "2") return("multiple")
     if (ans == "3") return("directory")
@@ -137,832 +107,180 @@ choose_input_files = function(
 ) {
   repeat {
     selected = character(0)
-    
+
     if (.Platform$OS.type == "windows") {
       selected = tryCatch(
         utils::choose.files(caption = caption, multi = TRUE),
         error = function(e) character(0)
       )
     }
-    
+
     if (length(selected) > 0 && all(file.exists(selected))) {
       return(normalizePath(selected, winslash = "/", mustWork = TRUE))
     }
-    
+
     cat("File chooser unavailable or no files selected.\n")
-    if (interactive()) {
-      ans = trimws(readline(prompt_text))
-    } else {
-      cat(prompt_text)
-      ans = trimws(readLines("stdin", n=1))
-    }
+    ans = read_cli_input(prompt_text)
     parts = trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
     parts = path.expand(parts[nzchar(parts)])
-    
+
     if (length(parts) > 0 && all(file.exists(parts))) {
       return(normalizePath(parts, winslash = "/", mustWork = TRUE))
     }
-    
+
     cat("One or more files were not found. Please try again.\n")
+  }
+}
+
+choose_output_dir = function(
+    prompt_text = "Enter full path to output directory: ",
+    caption = "Select output directory",
+    create = TRUE
+) {
+  repeat {
+    selected = NULL
+
+    if (.Platform$OS.type == "windows") {
+      selected = tryCatch(
+        utils::choose.dir(caption = caption),
+        error = function(e) NA_character_
+      )
+    }
+
+    if (!is.null(selected) && !is.na(selected) && nzchar(selected) && dir.exists(selected)) {
+      return(normalizePath(selected, winslash = "/", mustWork = TRUE))
+    }
+
+    cat("Directory chooser unavailable or no folder selected.\n")
+    path = path.expand(read_cli_input(prompt_text))
+
+    if (dir.exists(path)) {
+      return(normalizePath(path, winslash = "/", mustWork = TRUE))
+    }
+
+    if (create && ask_yes_no("Directory does not exist. Create it?", default = TRUE)) {
+      ok = dir.create(path, recursive = TRUE, showWarnings = FALSE)
+      if (ok && dir.exists(path)) {
+        return(normalizePath(path, winslash = "/", mustWork = TRUE))
+      }
+    }
+
+    cat("Directory not found or could not be created. Please try again.\n")
   }
 }
 
 collect_input_paths = function() {
   mode = choose_input_source_mode()
-  
+
   if (mode == "single") {
-    paths = choose_input_files(
-      prompt_text = "Enter full path to input file: ",
-      caption = "Select input file"
-    )
-    return(list(mode = mode, paths = paths))
+    return(list(
+      mode = mode,
+      paths = choose_input_files(
+        prompt_text = "Enter full path to input file: ",
+        caption = "Select input file"
+      )
+    ))
   }
-  
+
   if (mode == "multiple") {
-    paths = choose_input_files(
-      prompt_text = "Enter full paths to input files, separated by commas: ",
-      caption = "Select input files"
-    )
-    return(list(mode = mode, paths = paths))
+    return(list(
+      mode = mode,
+      paths = choose_input_files(
+        prompt_text = "Enter full paths to input files, separated by commas: ",
+        caption = "Select input files"
+      )
+    ))
   }
-  
+
   dir_path = choose_output_dir(
     prompt_text = "Enter folder containing input files: ",
     caption = "Select input folder",
     create = FALSE
   )
-  
+
   files = list.files(dir_path, full.names = TRUE)
   files = files[file.info(files)$isdir %in% FALSE]
-  
+
   if (length(files) == 0) {
     stop("No files were found in the selected directory.")
   }
-  
+
   list(mode = mode, paths = normalizePath(files, winslash = "/", mustWork = TRUE))
 }
 
-
-load_counts_data = function(file_path) {
+load_table_data = function(file_path) {
   ext = tolower(tools::file_ext(file_path))
-  
-  dat = switch(
+
+  switch(
     ext,
     "csv" = read.csv(file_path, stringsAsFactors = FALSE, check.names = FALSE),
     "tsv" = read.delim(file_path, stringsAsFactors = FALSE, check.names = FALSE),
     "txt" = read.delim(file_path, stringsAsFactors = FALSE, check.names = FALSE),
     stop("Unsupported file type: ", ext, ". Please use csv, tsv, or txt.")
   )
-  
-  dat
 }
 
-parse_one_mageck_rra_file = function(path, metric_col = "neg|lfc", gene_col = "id") {
-  dat = load_counts_data(path)
-  
-  required_cols = c(gene_col, metric_col)
-  missing_cols = setdiff(required_cols, colnames(dat))
-  if (length(missing_cols) > 0) {
+detect_input_type_from_paths = function(paths) {
+  types = vapply(paths, function(path) {
+    dat = load_table_data(path)
+    nms = colnames(dat)
+    
+    if ("neg|lfc" %in% nms) {
+      return("mageck_rra")
+    }
+    
+    if (any(grepl("\\|z$", nms)) || any(grepl("\\|beta$", nms))) {
+      return("mageck_mle")
+    }
+    
+    "raw_counts"
+    
+  }, character(1))
+
+  unique_types = unique(types)
+  if (length(unique_types) != 1) {
     stop(
-      basename(path),
-      " is missing required columns: ",
-      paste(missing_cols, collapse = ", ")
+      "Selected files appear to contain mixed input types: ",
+      paste(sprintf("%s (%s)", basename(paths), types), collapse = "; ")
     )
   }
-  
-  out = dat[, c(gene_col, metric_col), drop = FALSE]
-  colnames(out) = c("gene", "score")
-  out$gene = as.character(out$gene)
-  out
+
+  unique_types
 }
 
-parse_mageck_rra_set = function(paths, metric_col = "neg|lfc") {
-  score_list = vector("list", length(paths))
-  sample_names = character(length(paths))
-  
-  for (i in seq_along(paths)) {
-    path = paths[i]
-    one = parse_one_mageck_rra_file(path, metric_col = metric_col)
-    
-    sample_label = tools::file_path_sans_ext(basename(path))
-    sample_label = gsub('.gene_summary|_gene_summary', '', sample_label)
-    sample_label = gsub('.rra|_rra', '', sample_label)
-    
-    colnames(one)[2] = sample_label
-    
-    score_list[[i]] = one
-    sample_names[i] = sample_label
-  }
-  
-  merged = Reduce(
-    function(x, y) merge(x, y, by = "gene", all = TRUE),
-    score_list
-  )
-  
-  rownames(merged) = merged$gene
-  score_matrix = merged[, sample_names, drop = FALSE]
-  
-  list(
-    input_type = "mageck_rra",
-    gene_data = data.frame(gene = merged$gene, stringsAsFactors = FALSE),
-    score_matrix = score_matrix,
-    sample_names = colnames(score_matrix),
-    source_info = data.frame(file = paths, label = sample_names, stringsAsFactors = FALSE),
-    selected_metric = metric_col
-  )
+###############################################################################
+# Import sheet helpers
+###############################################################################
+
+normalize_yes_no = function(x, default = "yes") {
+  x = trimws(as.character(x))
+  x[x == ""] = default
+  x_low = tolower(x)
+  x_low[x_low %in% c("y", "yes", "true", "1")] = "yes"
+  x_low[x_low %in% c("n", "no", "false", "0")] = "no"
+  x_low
 }
 
-parse_one_mageck_mle_file = function(path) {
-  dat = load_counts_data(path)
+
+guess_column_role = function(column_name, dat) {
+  low = tolower(column_name)
+  is_num = is.numeric(dat[[column_name]])
   
-  required_cols = "Gene"
-  missing_cols = setdiff(required_cols, colnames(dat))
-  if (length(missing_cols) > 0) {
-    stop(
-      basename(path),
-      " is missing required columns: ",
-      paste(missing_cols, collapse = ", ")
-    )
-  }
-  
-  z_cols = grep("\\|z$", colnames(dat), value = TRUE)
-  if (length(z_cols) == 0) {
-    stop(basename(path), " has no columns ending in '|z'.")
-  }
-  
-  out = dat[, c("Gene", z_cols), drop = FALSE]
-  colnames(out)[1] = "gene"
-  out$gene = as.character(out$gene)
-  
-  file_stub = tools::file_path_sans_ext(basename(path))
-  new_names = sub("\\|z$", "", z_cols)
-  colnames(out)[-1] = new_names
-  
-  out
+  if (grepl("guide|grna|sgrna|barcode|construct", low)) return("guide")
+  if (grepl("gene|symbol|hgnc|target|^id$", low)) return("gene")
+  if (is_num) return("sample")
+  "ignore"
 }
 
-parse_mageck_mle_set = function(paths) {
-  parsed = lapply(paths, parse_one_mageck_mle_file)
-  
-  merged = Reduce(
-    function(x, y) merge(x, y, by = "gene", all = TRUE),
-    parsed
-  )
-  
-  rownames(merged) = merged$gene
-  score_matrix = merged[, setdiff(colnames(merged), "gene"), drop = FALSE]
-  
-  list(
-    input_type = "mageck_mle",
-    gene_data = data.frame(gene = merged$gene, stringsAsFactors = FALSE),
-    score_matrix = score_matrix,
-    sample_names = colnames(score_matrix),
-    source_info = data.frame(file = paths, stringsAsFactors = FALSE),
-    selected_metric = "z"
-  )
-}
-
-show_vector_choices = function(x) {
-  for (i in seq_along(x)) {
-    cat(sprintf("  %d) %s\n", i, x[i]))
-  }
-}
-
-ask_single_column = function(prompt, choices, allow_skip = FALSE) {
-  repeat {
-    cat("\n", prompt, "\n", sep = "")
-    show_vector_choices(choices)
-    
-    if (allow_skip) {
-      cat("  0) Skip\n")
-    }
-    
-    if (interactive()) {
-      ans = trimws(readline("Enter choice number: "))
-    } else {
-      cat("Enter choice number: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-    
-    if (allow_skip && ans == "0") {
-      return(NA_character_)
-    }
-    
-    if (ans %in% as.character(seq_along(choices))) {
-      return(choices[as.integer(ans)])
-    }
-    
-    cat("Invalid choice. Please enter one of the listed numbers.\n")
-  }
-}
-
-ask_multiple_columns = function(prompt, choices) {
-  repeat {
-    cat("\n", prompt, "\n", sep = "")
-    show_vector_choices(choices)
-    cat("Enter one or more numbers separated by commas.\n")
-    cat("Example: 3,4,5\n")
-    
-    if (interactive()) {
-      ans = trimws(readline("Selection: "))
-    } else {
-      cat("Selection: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-    
-    if (!nzchar(ans)) {
-      cat("Please select at least one column.\n")
-      next
-    }
-    
-    idx = trimws(strsplit(ans, ",", fixed = TRUE)[[1]])
-    
-    if (all(idx %in% as.character(seq_along(choices)))) {
-      idx_num = unique(as.integer(idx))
-      return(choices[idx_num])
-    }
-    
-    cat("Invalid selection. Please enter valid column numbers separated by commas.\n")
-  }
-}
-
-guess_counts_columns = function(cnts) {
-  nms = colnames(cnts)
-  low = tolower(nms)
-  
-  is_numeric_col = vapply(cnts, is.numeric, logical(1))
-  
-  guide_candidates = nms[
-    grepl("guide|grna|sgRNA|sgrna|barcode|construct", nms, ignore.case = TRUE)
-  ]
-  
-  gene_candidates = nms[
-    grepl("gene|symbol|hgnc|target", nms, ignore.case = TRUE)
-  ]
-  
-  sample_candidates = nms[is_numeric_col]
-  
-  list(
-    guide_candidates = unique(guide_candidates),
-    gene_candidates = unique(gene_candidates),
-    sample_candidates = unique(sample_candidates)
-  )
-}
-
-preview_column_guesses = function(guesses) {
-  cat("\nDetected likely columns:\n")
-  
-  cat("\nGuide column candidates:\n")
-  if (length(guesses$guide_candidates) > 0) {
-    cat(paste0(" - ", guesses$guide_candidates), sep = "\n")
-  } else {
-    cat(" - None detected\n")
-  }
-  
-  cat("\nGene column candidates:\n")
-  if (length(guesses$gene_candidates) > 0) {
-    cat(paste0(" - ", guesses$gene_candidates), sep = "\n")
-  } else {
-    cat(" - None detected\n")
-  }
-  
-  cat("\nSample/count column candidates:\n")
-  if (length(guesses$sample_candidates) > 0) {
-    cat(paste0(" - ", guesses$sample_candidates), sep = "\n")
-  } else {
-    cat(" - None detected\n")
-  }
-  
-  cat("\n")
-}
-
-validate_counts_mapping = function(cnts, mapping) {
-  required_names = c("guide_col", "gene_col", "sample_cols")
-  missing_names = setdiff(required_names, names(mapping))
-  
-  if (length(missing_names) > 0) {
-    stop("Mapping object is missing required entries: ",
-         paste(missing_names, collapse = ", "))
-  }
-  
-  all_cols = colnames(cnts)
-  
-  if (!mapping$guide_col %in% all_cols) {
-    stop("Mapped guide column not found in counts data: ", mapping$guide_col)
-  }
-  
-  if (!mapping$gene_col %in% all_cols) {
-    stop("Mapped gene column not found in counts data: ", mapping$gene_col)
-  }
-  
-  if (length(mapping$sample_cols) == 0) {
-    stop("No sample/count columns were selected.")
-  }
-  
-  if (!all(mapping$sample_cols %in% all_cols)) {
-    bad = mapping$sample_cols[!mapping$sample_cols %in% all_cols]
-    stop("Mapped sample/count columns not found in counts data: ",
-         paste(bad, collapse = ", "))
-  }
-  
-  if (mapping$guide_col == mapping$gene_col) {
-    stop("Guide column and gene column cannot be the same.")
-  }
-  
-  overlap = intersect(c(mapping$guide_col, mapping$gene_col), mapping$sample_cols)
-  if (length(overlap) > 0) {
-    stop("Annotation columns cannot also be sample/count columns: ",
-         paste(overlap, collapse = ", "))
-  }
-  
-  non_numeric_sample_cols = mapping$sample_cols[
-    !vapply(cnts[mapping$sample_cols], is.numeric, logical(1))
-  ]
-  
-  if (length(non_numeric_sample_cols) > 0) {
-    stop("These selected sample/count columns are not numeric: ",
-         paste(non_numeric_sample_cols, collapse = ", "))
-  }
-  
-  invisible(TRUE)
-}
-
-extract_mapped_counts = function(cnts, mapping) {
-  annotation = cnts[, c(mapping$guide_col, mapping$gene_col), drop = FALSE]
-  counts_mat = cnts[, mapping$sample_cols, drop = FALSE]
-  rownames(counts_mat) = cnts[[mapping$guide_col]]
-
-  
-  list(
-    annotation = annotation,
-    counts = counts_mat
-  )
-}
-
-map_counts_columns = function(cnts) {
-  show_header("Map Counts Columns")
-  
-  all_cols = colnames(cnts)
-  guesses = guess_counts_columns(cnts)
-  
-  cat("The counts table has the following columns:\n\n")
-  show_vector_choices(all_cols)
-  cat("\n")
-  
-  preview_column_guesses(guesses)
-  
-  guide_default = if (length(guesses$guide_candidates) >= 1) guesses$guide_candidates[1] else NA_character_
-  gene_default  = if (length(guesses$gene_candidates) >= 1)  guesses$gene_candidates[1]  else NA_character_
-  sample_default = guesses$sample_candidates
-  
-  if (length(sample_default) == 0) {
-    cat("No numeric sample/count columns were automatically detected.\n")
-    cat("You will need to select them manually.\n")
-  }
-  
-  use_guess = FALSE
-  if (!is.na(guide_default) || !is.na(gene_default) || length(sample_default) > 0) {
-    cat("Proposed mapping:\n")
-    cat("  Guide column: ", ifelse(is.na(guide_default), "<none>", guide_default), "\n", sep = "")
-    cat("  Gene column:  ", ifelse(is.na(gene_default), "<none>", gene_default), "\n", sep = "")
-    cat("  Sample columns:\n")
-    if (length(sample_default) > 0) {
-      cat(paste0("   - ", sample_default), sep = "\n")
-    } else {
-      cat("   - <none>\n")
-    }
-    cat("\n")
-    
-    use_guess = ask_yes_no("Use this proposed mapping?", default = TRUE)
-  }
-  
-  if (use_guess) {
-    guide_col = guide_default
-    gene_col = gene_default
-    sample_cols = sample_default
-  } else {
-    guide_col = ask_single_column(
-      prompt = "Select the guide column:",
-      choices = all_cols,
-      allow_skip = FALSE
-    )
-    
-    gene_col = ask_single_column(
-      prompt = "Select the gene column:",
-      choices = all_cols,
-      allow_skip = FALSE
-    )
-    
-    remaining_cols = setdiff(all_cols, unique(c(guide_col, gene_col)))
-    
-    sample_cols = ask_multiple_columns(
-      prompt = "Select the sample/count columns:",
-      choices = remaining_cols
-    )
-  }
-  
-  mapping = list(
-    guide_col = guide_col,
-    gene_col = gene_col,
-    sample_cols = sample_cols
-  )
-  
-  validate_counts_mapping(cnts, mapping)
-  
-  show_header("Counts Column Mapping")
-  cat("Guide column: ", mapping$guide_col, "\n", sep = "")
-  cat("Gene column:  ", mapping$gene_col, "\n", sep = "")
-  cat("Sample columns:\n")
-  cat(paste0(" - ", mapping$sample_cols), sep = "\n")
-  cat("\n")
-  
-  if (!ask_yes_no("Is this mapping correct?", default = TRUE)) {
-    cat("Let's try again.\n")
-    return(map_counts_columns(cnts))
-  }
-  
-  mapping
-}
-
-validate_sample_metadata_alignment = function(sample_names, meta) {
-  required_col = "sample"
-  
-  if (!required_col %in% colnames(meta)) {
-    stop("Metadata must contain a 'sample' column.")
-  }
-  
-  meta_samples = as.character(meta$sample)
-  
-  missing_in_meta = setdiff(sample_names, meta_samples)
-  missing_in_counts = setdiff(meta_samples, sample_names)
-  
-  if (length(missing_in_meta) > 0) {
-    stop(
-      "These count samples are missing from metadata: ",
-      paste(missing_in_meta, collapse = ", ")
-    )
-  }
-  
-  if (length(missing_in_counts) > 0) {
-    stop(
-      "These metadata samples are not present in counts data: ",
-      paste(missing_in_counts, collapse = ", ")
-    )
-  }
-  
-  invisible(TRUE)
-}
-
-align_metadata_to_samples = function(sample_names, meta) {
-  meta = as.data.frame(meta, stringsAsFactors = FALSE)
-  idx = match(sample_names, meta$sample)
-  
-  if (any(is.na(idx))) {
-    stop("Could not align metadata to sample names.")
-  }
-  
-  meta[idx, , drop = FALSE]
-}
-
-aggregate_raw_counts_to_gene = function(parsed_raw, aggregation_fun = c("sum", "mean", "median", "none")) {
-  aggregation_fun = match.arg(aggregation_fun)
-  
-  if (is.null(parsed_raw$annotation) || is.null(parsed_raw$counts_matrix)) {
-    stop("parsed_raw must contain 'annotation' and 'counts_matrix'.")
-  }
-  
-  mapping = parsed_raw$mapping
-  gene_col = mapping$gene_col
-  ann = parsed_raw$annotation
-  cnt = parsed_raw$counts_matrix
-  
-  if (ncol(ann) < 2) {
-    stop("Annotation must contain at least guide and gene columns.")
-  }
-  
-  genes = as.character(parsed_raw$annotation[[gene_col]])
-  
-  if (any(is.na(genes)) || any(trimws(genes) == "")) {
-    stop("Gene column contains missing or empty values.")
-  }
-  
-  # TODO: split by finding gene name in sgrna col
-  split_idx = split(seq_len(nrow(cnt)), genes)
-  
-  agg_list = lapply(split_idx, function(i) {
-    block = cnt[i, , drop = FALSE]
-    
-    if (aggregation_fun == "sum") {
-      colSums(block, na.rm = TRUE)
-    } else if (aggregation_fun == "mean") {
-      colMeans(block, na.rm = TRUE)
-    } else if (aggregation_fun == "median"){
-      apply(block, 2, median, na.rm = TRUE)
-    } else{
-      block
-    }
-  })
-  
-  gene_mat = do.call(rbind, agg_list)
-  gene_mat = as.data.frame(gene_mat, check.names = FALSE)
-  gene_mat$gene = rownames(gene_mat)
-  rownames(gene_mat) = NULL
-  
-  gene_data = gene_mat["gene"]
-  score_matrix = gene_mat[, setdiff(colnames(gene_mat), "gene"), drop = FALSE]
-  
-  rownames(score_matrix) = gene_data$gene
-  
-  list(
-    gene_data = gene_data,
-    score_matrix = score_matrix
-  )
-}
-
-normalize_gene_counts = function(score_matrix, method = c("log2", "cpm_log2", "none")) {
-  method = match.arg(method)
-  
-  mat = as.matrix(score_matrix)
-  storage.mode(mat) = "numeric"
-  
-  if (method == "none") {
-    return(as.data.frame(mat, check.names = FALSE))
-  }
-  
-  if (method == "log2") {
-    mat = log2(mat + 1)
-    return(as.data.frame(mat, check.names = FALSE))
-  }
-  
-  lib_sizes = colSums(mat, na.rm = TRUE)
-  
-  if (any(lib_sizes == 0)) {
-    stop("One or more sample columns have total count zero; cannot compute CPM normalization.")
-  }
-  
-  mat = sweep(mat, 2, lib_sizes / 1e6, FUN = "/")
-  mat = log2(mat + 1)
-  
-  as.data.frame(mat, check.names = FALSE)
-}
-
-standardize_columns_to_z = function(score_matrix) {
-  mat = as.matrix(score_matrix)
-  storage.mode(mat) = "numeric"
-  
-  zmat = apply(mat, 2, function(x) {
-    s = stats::sd(x, na.rm = TRUE)
-    m = mean(x, na.rm = TRUE)
-    
-    if (is.na(s) || s == 0) {
-      rep(0, length(x))
-    } else {
-      (x - m) / s
-    }
-  })
-  
-  zmat = as.matrix(zmat)
-  rownames(zmat) = rownames(mat)
-  
-  as.data.frame(zmat, check.names = FALSE)
-}
-
-build_gene_score_matrix_from_raw_counts = function(
-    parsed_raw,
-    meta,
-    aggregation_fun = c("sum", "mean", "median", "none"),
-    normalize_method = c("cpm_log2", "log2", "none"),
-    make_z = TRUE
-) {
-  aggregation_fun = match.arg(aggregation_fun)
-  normalize_method = match.arg(normalize_method)
-  
-  if (is.null(parsed_raw$sample_names)) {
-    stop("parsed_raw must contain 'sample_names'.")
-  }
-  
-  validate_sample_metadata_alignment(parsed_raw$sample_names, meta)
-  meta_aligned = align_metadata_to_samples(parsed_raw$sample_names, meta)
-  
-  aggregated = aggregate_raw_counts_to_gene(
-    parsed_raw = parsed_raw,
-    aggregation_fun = aggregation_fun
-  )
-  
-  norm_scores = normalize_gene_counts(
-    score_matrix = aggregated$score_matrix,
-    method = normalize_method
-  )
-  
-  rownames(norm_scores) = aggregated$gene_data$gene
-  
-  if (make_z) {
-    final_scores = standardize_columns_to_z(norm_scores)
-  } else {
-    final_scores = norm_scores
-  }
-  
-  rownames(final_scores) = aggregated$gene_data$gene
-  
-  list(
-    input_type = "raw_counts",
-    gene_data = aggregated$gene_data,
-    score_matrix = final_scores,
-    sample_names = colnames(final_scores),
-    source_info = data.frame(
-      sample = parsed_raw$sample_names,
-      stringsAsFactors = FALSE
-    ),
-    selected_metric = if (make_z) "gene_level_z_from_raw_counts" else "normalized_gene_counts",
-    metadata = meta_aligned,
-    preprocessing = list(
-      aggregation_fun = aggregation_fun,
-      normalize_method = normalize_method,
-      make_z = make_z
-    )
-  )
-}
-
-choose_raw_count_processing_options = function() {
-  show_header("Raw Count Processing Options")
-  
-  cat("Choose how guide-level raw counts should be converted to gene-level scores.\n\n")
-  
-  cat("Aggregation method:\n")
-  cat("  1) Sum guide counts within each gene\n")
-  cat("  2) Mean guide counts within each gene\n")
-  cat("  3) Median guide counts within each gene\n")
-  cat("  4) No aggregation\n\n")
-  
-  repeat {
-    
-    if (interactive()) {
-      ans = trimws(readline("Choose aggregation method [1]: "))
-    } else {
-      cat("Choose aggregation method [1]: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-    
-    if (ans == "" || ans == "1") {
-      aggregation_fun = "sum"
-      break
-    }
-    if (ans == "2") {
-      aggregation_fun = "mean"
-      break
-    }
-    if (ans == "3") {
-      aggregation_fun = "median"
-      break
-    }
-    if (ans == "4") {
-      aggregation_fun = "none"
-      break
-    }
-    
-    cat("Invalid choice. Please enter 1, 2, 3, or 4.\n")
-  }
-  
-  cat("\nNormalization method:\n")
-  cat("  1) CPM + log2(x + 1)\n")
-  cat("  2) log2(x + 1)\n")
-  cat("  3) None\n\n")
-  
-  repeat {
-    
-    if (interactive()) {
-      ans = trimws(readline("Choose normalization method [1]: "))
-    } else {
-      cat("Choose normalization method [1]: ")
-      ans = trimws(readLines("stdin", n=1))
-    }
-    
-    if (ans == "" || ans == "1") {
-      normalize_method = "cpm_log2"
-      break
-    }
-    if (ans == "2") {
-      normalize_method = "log2"
-      break
-    }
-    if (ans == "3") {
-      normalize_method = "none"
-      break
-    }
-    cat("Invalid choice. Please enter 1, 2, or 3.\n")
-  }
-  
-  make_z = ask_yes_no(
-    "Convert normalized gene-level values to Z-scores across genes within each sample?",
-    default = TRUE
-  )
-  
-  list(
-    aggregation_fun = aggregation_fun,
-    normalize_method = normalize_method,
-    make_z = make_z
-  )
-}
-
-parse_raw_counts_set = function(path) {
-  dat = load_counts_data(path)
-  mapping = map_counts_columns(dat)
-  mapped = extract_mapped_counts(dat, mapping)
-  
-  list(
-    input_type = "raw_counts",
-    raw_table = dat,
-    annotation = mapped$annotation,
-    counts_matrix = mapped$counts,
-    sample_names = colnames(mapped$counts),
-    mapping = mapping
-  )
-}
-
-parse_input_set = function(input_type, paths) {
-  if (input_type == "raw_counts") {
-    if (length(paths) != 1) {
-      stop("Raw counts input currently expects exactly one file.")
-    }
-    return(parse_raw_counts_set(paths))
-  }
-  
-  if (input_type == "mageck_rra") {
-    return(parse_mageck_rra_set(paths, metric_col = "neg|lfc"))
-  }
-  
-  if (input_type == "mageck_mle") {
-    return(parse_mageck_mle_set(paths))
-  }
-  
-  stop("Unsupported input type: ", input_type)
-}
-
-show_standardized_matrix_summary = function(parsed_input) {
-  show_header("Standardized Matrix Summary")
-  
-  if (!is.null(parsed_input$score_matrix)) {
-    cat("Rows (genes): ", nrow(parsed_input$score_matrix), "\n", sep = "")
-    cat("Columns (samples/comparisons): ", ncol(parsed_input$score_matrix), "\n\n", sep = "")
-    cat("Column names:\n")
-    cat(paste0(" - ", colnames(parsed_input$score_matrix)), sep = "\n")
-    cat("\n")
-    return(invisible(NULL))
-  }
-  
-  if (!is.null(parsed_input$counts_matrix)) {
-    cat("Raw counts parsed successfully.\n")
-    cat("Rows: ", nrow(parsed_input$counts_matrix), "\n", sep = "")
-    cat("Columns: ", ncol(parsed_input$counts_matrix), "\n\n", sep = "")
-    cat("Sample names:\n")
-    cat(paste0(" - ", colnames(parsed_input$counts_matrix)), sep = "\n")
-    cat("\n")
-  }
-}
-
-show_final_score_matrix_summary = function(final_input) {
-  show_header("Final Gene Score Matrix Summary")
-  
-  cat("Input type: ", final_input$input_type, "\n", sep = "")
-  cat("Selected metric: ", final_input$selected_metric, "\n", sep = "")
-  cat("Genes: ", nrow(final_input$score_matrix), "\n", sep = "")
-  cat("Samples/comparisons: ", ncol(final_input$score_matrix), "\n\n", sep = "")
-  
-  cat("Column names:\n")
-  cat(paste0(" - ", colnames(final_input$score_matrix)), sep = "\n")
-  cat("\n")
-}
-
-split_sample_tokens = function(sample_name) {
-  tokens = unlist(strsplit(sample_name, "[-_.]+", perl = TRUE))
-  tokens = tokens[nzchar(tokens)]
-  tokens
-}
-
-clean_token_core = function(token) {
-  sub("\\d+$", "", token)
-}
-
-detect_treatment_type = function(treatment) {
-  if (is.na(treatment) || !nzchar(treatment)) {
-    return(NA_character_)
-  }
-  
-  trt = toupper(treatment)
-  if (trt %in% c("DMSO", "CTRL", "CONTROL", "UNTREATED", "VEHICLE", "PBS")) {
-    return("control")
-  }
-  
-  "treatment"
-}
 
 parse_sample_name = function(sample_name) {
-  tokens = split_sample_tokens(sample_name)
+  tokens = unlist(strsplit(sample_name, "[-_.]+", perl = TRUE))
+  tokens = tokens[nzchar(tokens)]
   tok_upper = toupper(tokens)
   
   out = list(
     sample = sample_name,
-    cell_line = NA_character_,
+    cell_line = if (length(tokens) > 0) tokens[1] else NA_character_,
     treatment = NA_character_,
     treatment_type = NA_character_,
     rep = NA_integer_,
@@ -981,28 +299,16 @@ parse_sample_name = function(sample_name) {
   
   rep_idx = grep("^(REP|R|REPLICATE).*$", tok_upper)
   if (length(rep_idx) > 0) {
-    out$rep = suppressWarnings(
-      as.integer(sub("^(REP|R|REPLICATE)", "", tok_upper[rep_idx[1]]))
-    )
-    rep_idx=rep_idx[1]
-  }
-  
-  if (length(tokens) >= 2) {
-    out$cell_line = tokens[1]
-  } else {
-    out$cell_line = tokens[1]
+    out$rep = suppressWarnings(as.integer(sub("^(REP|R|REPLICATE)", "", tok_upper[rep_idx[1]])))
+    rep_idx = rep_idx[1]
   }
   
   remaining_idx = seq_along(tokens)
-  remaining_idx = setdiff(remaining_idx, c(time_idx, rep_idx))
-  
-  if (length(tokens) >= 2) {
-    remaining_idx = setdiff(remaining_idx, 1)
-  }
+  remaining_idx = setdiff(remaining_idx, c(1, time_idx, rep_idx))
   
   if (length(remaining_idx) > 0) {
     trt_tok = tokens[remaining_idx[length(remaining_idx)]]
-    trt_core = clean_token_core(trt_tok)
+    trt_core = sub("\\d+$", "", trt_tok)
     out$treatment = toupper(trt_core)
     
     if (is.na(out$rep) && grepl("\\d+$", trt_tok)) {
@@ -1010,286 +316,944 @@ parse_sample_name = function(sample_name) {
     }
   }
   
-  out$treatment_type = detect_treatment_type(out$treatment)
+  trt = toupper(out$treatment)
+  out$treatment_type = if (
+    !is.na(trt) && nzchar(trt) && trt %in% c("DMSO", "CTRL", "CONTROL", "UNTREATED", "VEHICLE", "PBS")
+  ) {
+    "control"
+  } else if (!is.na(trt) && nzchar(trt)) {
+    "treatment"
+  } else {
+    NA_character_
+  }
   
   out
 }
 
-autodetect_metadata_from_samples = function(sample_names) {
-  parsed = lapply(sample_names, parse_sample_name)
-  
-  meta = data.frame(
-    sample = vapply(parsed, function(x) x$sample, character(1)),
-    cell_line = vapply(parsed, function(x) x$cell_line, character(1)),
-    treatment = vapply(parsed, function(x) x$treatment, character(1)),
-    treatment_type = vapply(parsed, function(x) x$treatment_type, character(1)),
-    rep = vapply(parsed, function(x) {
-      if (is.na(x$rep)) NA_integer_ else as.integer(x$rep)
-    }, integer(1)),
-    timepoint = vapply(parsed, function(x) x$timepoint, character(1)),
-    stringsAsFactors = FALSE
-  )
-  
-  meta[] = lapply(meta, function(col) {
-    if (is.character(col)) {
-      col[trimws(col) == ""] = NA_character_
-    }
-    col
-  })
-  
-  meta
+
+clean_sample_name = function(x) {
+  x = trimws(as.character(x))
+  x[x == ""] = NA_character_
+  x
 }
 
-edit_metadata_interactively = function(meta) {
-  show_header("Metadata Preview")
-  cat("Metadata inferred from sample names looks like:\n\n")
-  print(meta)
-  cat("\nRequired columns: sample, cell_line, treatment, treatment_type\n")
-  cat("You may now edit the metadata table.\n\n")
-  
-  pause("Press Enter to open the metadata editor...")
-  
-  edited = utils::edit(meta)
-  
-  if (is.null(edited)) {
-    stop("Metadata editing was cancelled.")
+
+build_counts_import_sheet = function(paths) {
+  rows = lapply(paths, function(path) {
+    dat = load_table_data(path)
+    nms = colnames(dat)
+    
+    
+    out = data.frame(
+      file = normalizePath(path, winslash = "/", mustWork = TRUE),
+      file_label = tools::file_path_sans_ext(basename(path)),
+      column_name = nms,
+      role = vapply(nms, function(x) guess_column_role(x, dat), character(1)),
+      sample = NA_character_,
+      cell_line = NA_character_,
+      treatment = NA_character_,
+      treatment_type = NA_character_,
+      rep = NA_integer_,
+      timepoint = NA_character_,
+      include_sample = NA_character_,
+      Group_By = NA_character_,
+      stringsAsFactors = FALSE
+    )
+    
+    sample_idx = which(out$role == "sample")
+    if (length(sample_idx) > 0) {
+      parsed = lapply(out$column_name[sample_idx], parse_sample_name)
+      out$sample[sample_idx] = vapply(parsed, function(x) x$sample, character(1))
+      out$cell_line[sample_idx] = vapply(parsed, function(x) x$cell_line, character(1))
+      out$treatment[sample_idx] = vapply(parsed, function(x) x$treatment, character(1))
+      out$treatment_type[sample_idx] = vapply(parsed, function(x) x$treatment_type, character(1))
+      out$rep[sample_idx] = vapply(parsed, function(x) x$rep, integer(1))
+      out$timepoint[sample_idx] = vapply(parsed, function(x) x$timepoint, character(1))
+      out$include_sample[sample_idx] = "yes"
+    }
+    out
+    
+    })
+
+  do.call(rbind, rows)
+}
+
+build_standardized_import_sheet = function(paths, input_type) {
+  rows = lapply(paths, function(path) {
+    dat = load_table_data(path)
+
+    if (input_type == "mageck_rra") {
+      sample_name = tools::file_path_sans_ext(basename(path))
+      sample_name = gsub(".gene_summary|_gene_summary", "", sample_name)
+      sample_name = gsub(".rra|_rra", "", sample_name)
+      parsed = parse_sample_name(sample_name)
+
+      data.frame(
+        file = path,
+        column_name = sample_name,
+        role = "sample",
+        sample = sample_name,
+        cell_line = parsed$cell_line,
+        treatment = parsed$treatment,
+        treatment_type = parsed$treatment_type,
+        rep = if (is.na(parsed$rep)) NA_integer_ else parsed$rep,
+        timepoint = parsed$timepoint,
+        include_sample = "yes",
+        Group_By = parsed$Group_By,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      metric_cols = grep("\\|(z|beta)$", colnames(dat), value = TRUE)
+      sample_names = sub("\\|(z|beta)$", "", metric_cols)
+      guessed = lapply(sample_names, parse_sample_name)
+
+      data.frame(
+        file = path,
+        column_name = metric_cols,
+        role = "sample",
+        sample = sample_names,
+        cell_line = vapply(guessed, function(x) x$cell_line, character(1)),
+        treatment = vapply(guessed, function(x) x$treatment, character(1)),
+        treatment_type = vapply(guessed, function(x) x$treatment_type, character(1)),
+        rep = vapply(guessed, function(x) if (is.na(x$rep)) NA_integer_ else x$rep, integer(1)),
+        timepoint = vapply(guessed, function(x) x$timepoint, character(1)),
+        include_sample = "yes",
+        Group_By = vapply(guessed, function(x) x$Group_By, character(1)),
+        stringsAsFactors = FALSE
+      )
+    }
+  })
+
+  do.call(rbind, rows)
+}
+
+build_import_sheet = function(paths, input_type) {
+  if (input_type == "raw_counts") {
+    return(build_counts_import_sheet(paths))
   }
-  
+
+  build_standardized_import_sheet(paths, input_type)
+}
+
+edit_import_sheet = function(import_sheet, input_type) {
+  show_header("Import Sheet Preview")
+  cat("Review and edit the import sheet.\n")
+  cat("\nImportant columns:\n")
+  cat(" - include_sample: yes / no\n")
+  cat(" - Group_By: grouping label to use later for MCD analysis\n")
+  if (input_type == "raw_counts") {
+    cat(" - role: gene / guide / sample / ignore\n")
+  }
+  cat("\n")
+  print(import_sheet)
+  cat("\n")
+
+  cat("Opening the import sheet editor... \n")
+  edited = utils::edit(import_sheet)
+
+  if (is.null(edited)) {
+    stop("Import sheet editing was cancelled.")
+  }
+
   as.data.frame(edited, stringsAsFactors = FALSE)
 }
 
-validate_metadata = function(meta) {
-  required_cols = c("sample", "cell_line", "treatment", "treatment_type", "rep", "timepoint")
-  missing_cols = setdiff(required_cols, colnames(meta))
+validate_import_sheet_common = function(import_sheet) {
+  required_cols = c(
+    "file", "column_name", "role", "sample", "cell_line", "treatment",
+    "treatment_type", "rep", "timepoint", "include_sample", "Group_By"
+  )
+  missing_cols = setdiff(required_cols, colnames(import_sheet))
+  if (length(missing_cols) > 0) {
+    stop("Import sheet is missing required columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  import_sheet$include_sample = normalize_yes_no(import_sheet$include_sample, default = "yes")
+  bad_include = !(is.na(import_sheet$include_sample) | import_sheet$include_sample %in% c("yes", "no"))
+  if (any(bad_include)) {
+    stop("include_sample must contain only yes or no.")
+  }
+
+  import_sheet$sample = clean_sample_name(import_sheet$sample)
+  import_sheet$cell_line = clean_sample_name(import_sheet$cell_line)
+  import_sheet$treatment = clean_sample_name(import_sheet$treatment)
+  import_sheet$treatment_type = clean_sample_name(import_sheet$treatment_type)
+  import_sheet$timepoint = clean_sample_name(import_sheet$timepoint)
+  import_sheet$Group_By = clean_sample_name(import_sheet$Group_By)
+
+  import_sheet$rep = suppressWarnings(as.integer(import_sheet$rep))
+  import_sheet
+}
+
+validate_counts_import_sheet = function(import_sheet) {
+  import_sheet = validate_import_sheet_common(import_sheet)
+
+  for (path in unique(import_sheet$file)) {
+    one = import_sheet[import_sheet$file == path, , drop = FALSE]
+    gene_n = sum(one$role == "gene", na.rm = TRUE)
+    if (gene_n != 1) {
+      stop("Each counts file must have exactly one column marked as 'gene': ", basename(path))
+    }
+
+    guide_n = sum(one$role == "guide", na.rm = TRUE)
+    if (guide_n > 1) {
+      stop("Each counts file can have at most one column marked as 'guide': ", basename(path))
+    }
+    
+    sample_bin = one$role == "sample" & one$include_sample == "yes"
+    sample_rows = one[sample_bin, , drop = FALSE]
+    if (nrow(sample_rows) == 0) {
+      stop("Each counts file must have at least one column marked as 'sample': ", basename(path))
+    }
+
+    required_sample_cols = c("sample", "cell_line", "treatment", "treatment_type", "include_sample")
+    for (col in required_sample_cols) {
+      bad = is.na(sample_rows[[col]]) | trimws(as.character(sample_rows[[col]])) == ""
+      if (any(bad)) {
+        stop("Counts sample rows must have non-empty values for '", col, "' in file: ", basename(path))
+      }
+    }
+  }
   
+  # for group by
+  if(!exists('Group_By', import_sheet)){
+    stop('Please do not remove Group_By. Leave Blank if no grouping variable required')
+  } else if (all(is.na(import_sheet$Group_By))){
+    cat("No Grouping Variable Provided. Setting Group By to None")
+    import_sheet$Group_By = ifelse(import_sheet$include_sample == 'yes', "none", NA)
+  } else {
+    ng = paste(import_sheet$Group_By[which(!is.na(import_sheet$Group_By))], collapse = ", ")
+    import_sheet$Group_By = ifelse(import_sheet$include_sample == 'yes', ng, NA)
+  }
+
+  import_sheet
+}
+
+validate_standardized_import_sheet = function(import_sheet) {
+  import_sheet = validate_import_sheet_common(import_sheet)
+
+  sample_rows = import_sheet[import_sheet$role == "sample", , drop = FALSE]
+  if (nrow(sample_rows) == 0) {
+    stop("No sample rows were found in the import sheet.")
+  }
+
+  required_sample_cols = c("sample", "cell_line", "treatment", "treatment_type", "include_sample")
+  for (col in required_sample_cols) {
+    bad = is.na(sample_rows[[col]]) | trimws(as.character(sample_rows[[col]])) == ""
+    if (any(bad)) {
+      stop("Sample rows must have non-empty values for '", col, "'.")
+    }
+  }
+  
+  # for group by
+  if(!exists('Group_By', import_sheet)){
+    stop('Please do not remove Group_By. Leave Blank if no grouping variable required')
+  } else if (all(is.na(import_sheet$Group_By))){
+    cat("No Grouping Variable Provided. Setting Group By to None")
+    import_sheet$Group_By = ifelse(import_sheet$include_sample == 'yes', "none", NA)
+  } else {
+    ng = paste(import_sheet$Group_By[which(!is.na(import_sheet$Group_By))], collapse = ", ")
+    import_sheet$Group_By = ifelse(import_sheet$include_sample == 'yes', ng, NA)
+  }
+  
+
+  import_sheet
+}
+
+###############################################################################
+# Parsing helpers
+###############################################################################
+
+merge_gene_tables = function(tbls, by_cols = "gene") {
+  Reduce(function(x, y) merge(x, y, by = by_cols, all = TRUE), tbls)
+}
+
+make_unique_sample_names = function(x) {
+  make.unique(as.character(x), sep = "__")
+}
+
+parse_counts_from_import_sheet = function(paths, import_sheet) {
+  parsed_files = lapply(paths, function(path) {
+    dat = load_table_data(path)
+    spec = import_sheet[import_sheet$file == path, , drop = FALSE]
+
+    gene_col = spec$column_name[spec$role == "gene"][1]
+    guide_col = if (any(spec$role == "guide")) spec$column_name[spec$role == "guide"][1] else NA_character_
+    sample_spec = spec[spec$role == "sample" & spec$include_sample == "yes" , , drop = FALSE]
+
+    if (!all(sample_spec$column_name %in% colnames(dat))) {
+      stop("Some selected sample columns were not found in file: ", basename(path))
+    }
+
+    annotation = data.frame(
+      gene = as.character(dat[[gene_col]]),
+      guide = if (!is.na(guide_col)) as.character(dat[[guide_col]]) else as.character(dat[[gene_col]]),
+      stringsAsFactors = FALSE
+    )
+
+    counts = dat[, sample_spec$column_name, drop = FALSE]
+    counts = as.matrix(counts)
+
+
+    list(
+      annotation = annotation,
+      counts = counts,
+      sample_map = sample_spec,
+      source_info = data.frame(
+        file = path,
+        gene_column = gene_col,
+        guide_column = ifelse(is.na(guide_col), "", guide_col),
+        stringsAsFactors = FALSE
+      )
+    )
+  })
+
+  combined = parsed_files[[1]]
+
+  if (length(parsed_files) > 1) {
+    for (i in 2:length(parsed_files)) {
+      nxt = parsed_files[[i]]
+      x = cbind(combined$annotation, combined$counts, stringsAsFactors = FALSE)
+      y = cbind(nxt$annotation, nxt$counts, stringsAsFactors = FALSE)
+      merged = merge(x, y, by = c("gene", "guide"), all = TRUE)
+
+      annotation = merged[, c("gene", "guide"), drop = FALSE]
+      counts = merged[, setdiff(colnames(merged), c("gene", "guide")), drop = FALSE]
+
+      combined$annotation = annotation
+      combined$counts = counts
+      combined$sample_map = rbind(combined$sample_map, nxt$sample_map)
+      combined$source_info = rbind(combined$source_info, nxt$source_info)
+    }
+  }
+
+  list(
+    input_type = "raw_counts",
+    annotation = combined$annotation,
+    counts_matrix = combined$counts,
+    sample_names = colnames(combined$counts),
+    source_info = combined$source_info,
+    sample_map = combined$sample_map,
+    import_sheet = import_sheet
+  )
+}
+
+parse_one_mageck_rra_file = function(path, metric_col = "neg|lfc", gene_col = "id") {
+  dat = load_table_data(path)
+
+  required_cols = c(gene_col, metric_col)
+  missing_cols = setdiff(required_cols, colnames(dat))
   if (length(missing_cols) > 0) {
     stop(
-      "Metadata is missing required columns: ",
+      basename(path),
+      " is missing required columns: ",
       paste(missing_cols, collapse = ", ")
     )
   }
+
+  out = dat[, c(gene_col, metric_col), drop = FALSE]
+  colnames(out) = c("gene", "score")
+  out$gene = as.character(out$gene)
+  out
+}
+
+parse_mageck_rra_from_import_sheet = function(paths, import_sheet, metric_col = "neg|lfc") {
+  score_list = vector("list", length(paths))
+  sample_rows = vector("list", length(paths))
+
+  for (i in seq_along(paths)) {
+    path = paths[i]
+    one = parse_one_mageck_rra_file(path, metric_col = metric_col)
+    spec = import_sheet[import_sheet$file == path & import_sheet$role == "sample", , drop = FALSE]
+
+    if (nrow(spec) != 1) {
+      stop("Each RRA file must contribute exactly one sample row in the import sheet: ", basename(path))
+    }
+
+    sample_name = spec$sample[1]
+    colnames(one)[2] = sample_name
+    score_list[[i]] = one
+    sample_rows[[i]] = spec
+  }
+
+  merged = merge_gene_tables(score_list, by_cols = "gene")
+  rownames(merged) = merged$gene
+  sample_names = unlist(lapply(sample_rows, function(x) x$sample), use.names = FALSE)
+  score_matrix = merged[, sample_names, drop = FALSE]
+
+  list(
+    input_type = "mageck_rra",
+    gene_data = data.frame(gene = merged$gene, stringsAsFactors = FALSE),
+    score_matrix = score_matrix,
+    sample_names = colnames(score_matrix),
+    source_info = data.frame(file = paths, stringsAsFactors = FALSE),
+    selected_metric = metric_col,
+    sample_map = do.call(rbind, sample_rows),
+    import_sheet = import_sheet
+  )
+}
+
+parse_one_mageck_mle_file = function(path) {
+  dat = load_table_data(path)
+
+  required_cols = "Gene"
+  missing_cols = setdiff(required_cols, colnames(dat))
+  if (length(missing_cols) > 0) {
+    stop(
+      basename(path),
+      " is missing required columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+
+  metric_cols = grep("\\|(z|beta)$", colnames(dat), value = TRUE)
+  if (length(metric_cols) == 0) {
+    stop(basename(path), " has no columns ending in '|z' or '|beta'.")
+  }
+
+  z_cols = grep("\\|z$", metric_cols, value = TRUE)
+  keep_cols = if (length(z_cols) > 0) z_cols else metric_cols
+
+  out = dat[, c("Gene", keep_cols), drop = FALSE]
+  colnames(out)[1] = "gene"
+  out$gene = as.character(out$gene)
+  out
+}
+
+parse_mageck_mle_from_import_sheet = function(paths, import_sheet) {
+  parsed_list = vector("list", length(paths))
+  sample_rows = list()
+
+  for (i in seq_along(paths)) {
+    path = paths[i]
+    dat = parse_one_mageck_mle_file(path)
+    original_metric_cols = colnames(dat)[-1]
+    sample_keys = sub("\\|(z|beta)$", "", original_metric_cols)
+
+    spec = import_sheet[import_sheet$file == path & import_sheet$role == "sample", , drop = FALSE]
+    idx = match(sample_keys, spec$sample)
+    if (any(is.na(idx))) {
+      stop("MLE import sheet is missing sample metadata for one or more metric columns in ", basename(path))
+    }
+
+    spec = spec[idx, , drop = FALSE]
+    new_names = make_unique_sample_names(spec$sample)
+    colnames(dat)[-1] = new_names
+    spec$sample = new_names
+
+    parsed_list[[i]] = dat
+    sample_rows[[i]] = spec
+  }
+
+  merged = merge_gene_tables(parsed_list, by_cols = "gene")
+  rownames(merged) = merged$gene
+  score_matrix = merged[, setdiff(colnames(merged), "gene"), drop = FALSE]
+
+  list(
+    input_type = "mageck_mle",
+    gene_data = data.frame(gene = merged$gene, stringsAsFactors = FALSE),
+    score_matrix = score_matrix,
+    sample_names = colnames(score_matrix),
+    source_info = data.frame(file = paths, stringsAsFactors = FALSE),
+    selected_metric = "z_or_beta",
+    sample_map = do.call(rbind, sample_rows),
+    import_sheet = import_sheet
+  )
+}
+
+parse_input_from_import_sheet = function(input_type, paths, import_sheet) {
+  if (input_type == "raw_counts") {
+    return(parse_counts_from_import_sheet(paths, import_sheet))
+  }
+  if (input_type == "mageck_rra") {
+    return(parse_mageck_rra_from_import_sheet(paths, import_sheet))
+  }
+  if (input_type == "mageck_mle") {
+    return(parse_mageck_mle_from_import_sheet(paths, import_sheet))
+  }
+  stop("Unsupported input type: ", input_type)
+}
+
+import_input_pipeline = function(paths) {
+  input_type = detect_input_type_from_paths(paths)
+  import_sheet = build_import_sheet(paths, input_type)
+  import_sheet = edit_import_sheet(import_sheet, input_type)
+
+  if (input_type == "raw_counts") {
+    import_sheet = validate_counts_import_sheet(import_sheet)
+  } else {
+    import_sheet = validate_standardized_import_sheet(import_sheet)
+  }
+
+  parsed_input = parse_input_from_import_sheet(input_type, paths, import_sheet)
+
+  list(
+    input_type = input_type,
+    # import_sheet = import_sheet,
+    parsed_input = parsed_input
+  )
+}
+
+###############################################################################
+# Metadata and sample helpers
+###############################################################################
+
+make_analysis_sample_name = function(cell_line, treatment, timepoint) {
+  parts = c(cell_line, treatment, timepoint)
+  parts = trimws(as.character(parts))
+  parts = parts[nzchar(parts) & !is.na(parts)]
+  paste(parts, collapse = "_")
+}
+
+###############################################################################
+# Counts preprocessing
+###############################################################################
+
+infer_gene_from_guide <- function(guide_values, gene_values) {
+  genes <- unique(trimws(as.character(gene_values)))
+  genes <- genes[!is.na(genes) & nzchar(genes)]
   
-  required_nonempty = c("sample", "cell_line", "treatment", "treatment_type")
+  genes_lc <- tolower(genes)
+  guides_lc <- tolower(as.character(guide_values))
   
-  empty_required = vapply(
-    required_nonempty,
-    function(col) any(is.na(meta[[col]]) | trimws(as.character(meta[[col]])) == ""),
-    logical(1)
+  # Match longer gene symbols first to reduce partial-match errors
+  o <- order(nchar(genes_lc), decreasing = TRUE)
+  genes <- genes[o]
+  genes_lc <- genes_lc[o]
+  
+  inferred <- vapply(guides_lc, function(g) {
+    hit <- which(vapply(genes_lc, function(gene) {
+      grepl(gene, g, fixed = TRUE)
+    }, logical(1)))
+    
+    if (length(hit)) genes[hit[1]] else NA_character_
+  }, character(1))
+  
+  inferred
+}
+
+aggregate_counts_to_gene_mean = function(annotation, counts_matrix, use_guide_matching = TRUE) {
+  annotation <- as.data.frame(annotation, stringsAsFactors = FALSE)
+  mat <- as.matrix(counts_matrix)
+  
+  if (nrow(mat) != nrow(annotation)) {
+    stop("nrow(counts_matrix) must match nrow(annotation)")
+  }
+  
+  gene_labels = as.character(annotation$gene)
+
+  if (use_guide_matching && "guide" %in% colnames(annotation)) {
+    
+    missing_gene <- is.na(gene_labels) | !nzchar(trimws(gene_labels))
+    
+      if (any(missing_gene)) {
+        inferred <- infer_gene_from_guide(
+          guide_values = annotation$guide[missing_gene],
+          gene_values  = annotation$gene
+        )
+        gene_labels[missing_gene] <- inferred
+      }
+    
+  }
+  
+  keep <- !is.na(gene_labels) & nzchar(gene_labels)
+  mat <- mat[keep, , drop = FALSE]
+  gene_labels <- gene_labels[keep]
+  
+  gene_sums <- rowsum(mat, group = gene_labels, reorder = FALSE)
+  gene_n <- tabulate(match(gene_labels, rownames(gene_sums)), nbins = nrow(gene_sums))
+  
+  gene_mat = gene_sums / gene_n
+
+
+  list(
+    gene_data = rownames(gene_mat),
+    score_matrix = gene_mat
+  )
+}
+
+collapse_replicate_columns = function(score_matrix, meta) {
+  groups = split(seq_len(ncol(score_matrix)), meta$analysis_sample)
+  collapsed = lapply(groups, function(idx) {
+    block = score_matrix[, idx, drop = FALSE]
+    if (ncol(block) == 1) {
+      as.numeric(block[, 1])
+    } else {
+      rowMeans(block, na.rm = TRUE)
+    }
+  })
+
+  out = do.call(cbind, collapsed)
+  out
+}
+
+standardize_columns_to_z = function(score_matrix) {
+  mat = as.matrix(score_matrix)
+  storage.mode(mat) = "numeric"
+  
+  zmat = apply(mat, 2, function(x) {
+    s = stats::sd(x, na.rm = TRUE)
+    m = mean(x, na.rm = TRUE)
+    
+    if (is.na(s) || s == 0) {
+      rep(0, length(x))
+    } else {
+      (x - m) / s
+    }
+  })
+  
+  zmat
+}
+
+
+build_gene_score_matrix_from_raw_counts = function(parsed_raw, meta) {
+
+  keep_cols = meta$sample
+  counts_subset = parsed_raw$counts_matrix[, keep_cols, drop = FALSE]
+
+  has_user_guide = any(parsed_raw$source_info$guide_column %in% c("", NA) == FALSE)
+
+  aggregated = aggregate_counts_to_gene_mean(
+    annotation = parsed_raw$annotation,
+    counts_matrix = counts_subset,
+    use_guide_matching = has_user_guide
+  )
+
+  rep_collapsed = collapse_replicate_columns(aggregated$score_matrix, meta)
+  z_scores = standardize_columns_to_z(rep_collapsed)
+  
+  
+  split_meta = split(meta, meta$analysis_sample)
+  
+  rows = lapply(split_meta, function(df) {
+    group_values = unique(df$Group_By)
+    group_values = group_values[!is.na(group_values) & nzchar(group_values)]
+
+    data.frame(
+      sample = df$analysis_sample[1],
+      cell_line = df$cell_line[1],
+      treatment = df$treatment[1],
+      treatment_type = df$treatment_type[1],
+      rep = nrow(df),
+      timepoint = df$timepoint[1],
+      include_sample = "yes",
+      Group_By = if (length(group_values) == 0) NA_character_ else group_values,
+      original_samples = paste(df$sample, collapse = ";"),
+      stringsAsFactors = FALSE
+    )
+  })
+  
+  collapsed_meta = do.call(rbind, rows)
+
+  list(
+    input_type = "raw_counts",
+    gene_data = aggregated$gene_data,
+    score_matrix = z_scores,
+    sample_names = colnames(z_scores),
+    source_info = parsed_raw$source_info,
+    selected_metric = "gene_level_z_from_raw_counts",
+    metadata = collapsed_meta,
+    preprocessing = list(
+      gene_aggregation = "mean",
+      replicate_aggregation = "mean",
+      final_transform = "z_score_by_column"
+    ),
+    import_sheet = parsed_raw$import_sheet
+  )
+}
+
+###############################################################################
+# Final input assembly
+###############################################################################
+
+build_final_input = function(parsed_input) {
+  
+  meta = as.data.frame(parsed_input$sample_map, stringsAsFactors = FALSE)
+  meta = meta[meta$role == "sample", , drop = FALSE]
+  meta$include_sample = normalize_yes_no(meta$include_sample, default = "yes")
+  meta = meta[meta$include_sample == "yes", , drop = FALSE]
+  
+  # standardize name to "cell line_treatment_timepoint"
+  meta$analysis_sample = vapply(
+    seq_len(nrow(meta)),
+    function(i) make_analysis_sample_name(meta$cell_line[i], 
+                                          meta$treatment[i], 
+                                          meta$timepoint[i]),
+    character(1)
   )
   
-  if (any(empty_required)) {
-    stop(
-      "Metadata has empty values in required columns: ",
-      paste(required_nonempty[empty_required], collapse = ", ")
+
+  if (nrow(meta) == 0) {
+    stop("No samples were marked for inclusion.")
+  }
+
+  
+  required_col = "sample"
+  
+  if (!required_col %in% colnames(meta)) {
+    stop("Metadata must contain a 'sample' column.")
+  }
+  
+  sample_names = colnames(parsed_input$counts_matrix)
+  meta_samples = as.character(meta$sample)
+  missing_in_counts = setdiff(meta_samples, sample_names)
+
+  if (length(missing_in_counts) > 0) {
+    stop("These metadata samples are not present in the matrix: ", paste(missing_in_counts, collapse = ", "))
+  }
+  
+  if (parsed_input$input_type == "raw_counts") {
+    return(build_gene_score_matrix_from_raw_counts(parsed_input, meta))
+  }
+
+  meta_aligned = align_metadata_to_samples(parsed_input$sample_names, meta)
+  keep_meta = meta_aligned[meta_aligned$include_sample == "yes", , drop = FALSE]
+  keep_cols = keep_meta$sample
+
+  final_input = parsed_input
+  final_input$score_matrix = final_input$score_matrix[, keep_cols, drop = FALSE]
+  final_input$sample_names = colnames(final_input$score_matrix)
+  final_input$metadata = keep_meta
+  final_input
+}
+
+
+###############################################################################
+# Summaries and output helpers
+###############################################################################
+
+add_value <- function(x, default = NA_character_) {
+  if (is.null(x) || length(x) == 0) NA_character_ else as.character(x)
+}
+
+add_nrow <- function(x) add_value(if (!is.null(x)) nrow(x) else NULL)
+add_ncol <- function(x) add_value(if (!is.null(x)) ncol(x) else NULL)
+
+save_analysis_outputs <- function(final_input,
+                                  res,
+                                  out_dir = ".",
+                                  file_name = "mcd_analysis_results.xlsx",
+                                  include_group_sheets = FALSE,
+                                  overwrite = TRUE) {
+ 
+  out_file <- file.path(out_dir, file_name)
+  
+  #-----------------------------
+  # Extract objects safely
+  #-----------------------------
+  score_matrix <- final_input$score_matrix
+  import_sheet <- final_input$import_sheet
+  metadata <- final_input$metadata
+  preprocessing <- final_input$preprocessing
+  source_info <- final_input$source_info
+  
+  mcd_tbl <- res$mcd_combined_results
+  cw_mcd_tbl <- res$cw_mcd_combined_results
+  
+  #-----------------------------
+  # Build summary sheet
+  #-----------------------------
+  summary_df <- data.frame(
+    field = c(
+      "input_type",
+      "selected_metric",
+      "n_genes",
+      "n_samples_score_matrix",
+      "score_matrix_nrow",
+      "score_matrix_ncol",
+      "group_by",
+      "contrast_mode",
+      "control_treatment",
+      "gene_aggregation",
+      "replicate_aggregation",
+      "final_transform",
+      "mcd_combined_results_nrow",
+      "cw_mcd_combined_results_nrow"
+    ),
+    value = c(
+      add_value(final_input$input_type),
+      add_value(final_input$selected_metric),
+      add_value(length(final_input$gene_data), NA_integer_),
+      add_value(length(final_input$sample_names), NA_integer_),
+      add_nrow(score_matrix),
+      add_ncol(score_matrix),
+      add_value(paste(res$group_by, collapse = ";")),
+      add_value(res$contrast_mode),
+      add_value(res$control_treatment),
+      add_value(preprocessing$gene_aggregation),
+      add_value(preprocessing$replicate_aggregation),
+      add_value(preprocessing$final_transform),
+      add_nrow(mcd_tbl),
+      add_nrow(cw_mcd_tbl)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  #-----------------------------
+  # Convert matrices to data frames for writing
+  #-----------------------------
+  score_df <- NULL
+  if (!is.null(score_matrix)) {
+    score_df <- data.frame(
+      gene = rownames(score_matrix),
+      as.data.frame(score_matrix, check.names = FALSE, stringsAsFactors = FALSE),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
     )
   }
   
-  invisible(TRUE)
-}
-choose_output_dir = function(
-    prompt_text = "Enter full path to output directory: ",
-    caption = "Select output directory",
-    create = TRUE
-) {
-  repeat {
-    selected = NULL
-    
-    if (.Platform$OS.type == "windows") {
-      selected = tryCatch(
-        utils::choose.dir(caption = caption),
-        error = function(e) NA_character_
+  #-----------------------------
+  # Create workbook
+  #-----------------------------
+  wb <- openxlsx::createWorkbook()
+  
+  header_style <- openxlsx::createStyle(
+    textDecoration = "bold"
+  )
+  
+  add_sheet_with_data <- function(wb, sheet_name, x) {
+    openxlsx::addWorksheet(wb, sheet_name)
+    openxlsx::writeData(wb, sheet = sheet_name, x = x, withFilter = TRUE)
+    if (nrow(x) > 0 && ncol(x) > 0) {
+      openxlsx::addStyle(
+        wb,
+        sheet = sheet_name,
+        style = header_style,
+        rows = 1,
+        cols = seq_len(ncol(x)),
+        gridExpand = TRUE
       )
     }
-    
-    if (!is.null(selected) && !is.na(selected) && nzchar(selected) && dir.exists(selected)) {
-      return(normalizePath(selected, winslash = "/", mustWork = TRUE))
-    }
-    
-    cat("Directory chooser unavailable or no folder selected.\n")
-    
-    if (interactive()) {
-      path = trimws(readline(prompt_text))
-    } else {
-      cat(prompt_text)
-      path = trimws(readLines("stdin", n=1))
-    }
-        
-    path = path.expand(path)
-    
-    if (dir.exists(path)) {
-      return(normalizePath(path, winslash = "/", mustWork = TRUE))
-    }
-    
-    if (create) {
-      if (ask_yes_no("Directory does not exist. Create it?", default = TRUE)) {
-        ok = dir.create(path, recursive = TRUE, showWarnings = FALSE)
-        if (ok && dir.exists(path)) {
-          return(normalizePath(path, winslash = "/", mustWork = TRUE))
-        }
+    openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
+    openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(x), widths = "auto")
+  }
+  
+  #-----------------------------
+  # Main sheets
+  #-----------------------------
+  add_sheet_with_data(wb, "run_summary", summary_df)
+
+  if (!is.null(import_sheet)) {
+    add_sheet_with_data(wb, "import_sheet", as.data.frame(import_sheet, stringsAsFactors = FALSE))
+  }
+  
+  if (!is.null(score_df)) {
+    add_sheet_with_data(wb, "score_matrix", score_df)
+  }
+  
+  if (!is.null(mcd_tbl)) {
+    add_sheet_with_data(wb, "mcd_results", as.data.frame(mcd_tbl, stringsAsFactors = FALSE))
+  }
+  
+  if (!is.null(cw_mcd_tbl)) {
+    add_sheet_with_data(wb, "cw_mcd_results", as.data.frame(cw_mcd_tbl, stringsAsFactors = FALSE))
+  }
+  
+  #-----------------------------
+  # Optional per-group sheets
+  #-----------------------------
+  if (isTRUE(include_group_sheets)) {
+    if (!is.null(res$mcd_results_by_group)) {
+      for (nm in names(res$mcd_results_by_group)) {
+        sheet_nm <- substr(
+          paste0("mcd_", gsub("[^A-Za-z0-9_]", "_", nm)),
+          1, 31
+        )
+        add_sheet_with_data(
+          wb,
+          sheet_nm,
+          as.data.frame(res$mcd_results_by_group[[nm]], stringsAsFactors = FALSE)
+        )
       }
     }
     
-    cat("Directory not found or could not be created. Please try again.\n")
+    if (!is.null(res$cw_mcd_results_by_group)) {
+      for (nm in names(res$cw_mcd_results_by_group)) {
+        cw_obj <- res$cw_mcd_results_by_group[[nm]]
+        
+        if (is.list(cw_obj) && length(cw_obj) >= 1 && is.data.frame(cw_obj[[1]])) {
+          sheet_nm <- substr(
+            paste0("cw_", gsub("[^A-Za-z0-9_]", "_", nm)),
+            1, 31
+          )
+          add_sheet_with_data(
+            wb,
+            sheet_nm,
+            as.data.frame(cw_obj[[1]], stringsAsFactors = FALSE)
+          )
+        }
+      }
+    }
   }
+  
+  #-----------------------------
+  # Save workbook
+  #-----------------------------
+  openxlsx::saveWorkbook(wb, out_file, overwrite = overwrite)
+  
+  invisible(out_file)
 }
-###### CLI #############
 
-source("run_mcd.R")
+###############################################################################
+# Main workflow
+###############################################################################
+# add video demo to github
+# add example metadata table.txt to data file 
+# update metadata to try and label baseline cols as well.
 
 main = function() {
   
-  check_required_packages(c("tools", "utils", "robustbase", "fdrtool"))
+  check_required_packages(c("tools", "utils", "robustbase", 
+                            "cellWise", "fdrtool", "openxlsx"))
   library(tools)
   library(utils)
   library(robustbase)
   library(fdrtool)
-  
-  
-  # script_dir = get_script_dir()
-  
+  library(cellWise)
+  library(openxlsx)
+
   show_header("CRISPR Drug Screen MCD UI")
   cat("Welcome. ")
-  cat("This tool will guide you through loading counts data,\n")
-  cat("reviewing metadata, and running an MCD analysis on CRISPR data.\n\n")
+  cat("This tool will guide you through loading screen data,\n")
+  cat("reviewing a single import sheet, and running an MCD analysis.\n\n")
   cat("R version: ", R.version.string, "\n", sep = "")
   cat("OS: ", Sys.info()[["sysname"]], "\n", sep = "")
-  
-  input_type = choose_input_type()
-  input_src = collect_input_paths()
 
-  parsed_input = tryCatch(
-    parse_input_set(input_type, input_src$paths),
-    error = function(e) {
-      show_header("Input Parsing Error")
-      cat(conditionMessage(e), "\n")
-      pause("Press Enter to exit...")
-      quit(status = 1)
-    }
+  input_src = run_or_exit(collect_input_paths(), "Input Selection Error")
+
+  imported = run_or_exit(
+    import_input_pipeline(input_src$paths),
+    "Import Pipeline Error"
   )
 
-  
-  if (input_type != "raw_counts") {
-    show_standardized_matrix_summary(parsed_input)
-  }
-
-  meta = autodetect_metadata_from_samples(parsed_input$sample_names)
-  
-  show_header("Autodetect Metadata")
-  cat("Metadata inferred from sample or condition names:\n\n")
-  print(meta)
-  cat("\n")
-  
-  if (ask_yes_no("Would you like to edit the metadata table now?", default = TRUE)) {
-    meta = tryCatch(
-      edit_metadata_interactively(meta),
-      error = function(e) {
-        cat("Error during metadata editing:\n")
-        cat(conditionMessage(e), "\n")
-        pause("Press Enter to exit...")
-        quit(status = 1)
-      }
-    )
-  }
-  
-  tryCatch(
-    validate_metadata(meta),
-    error = function(e) {
-      show_header("Metadata Validation Error")
-      cat(conditionMessage(e), "\n")
-      pause("Press Enter to exit...")
-      quit(status = 1)
-    }
+  final_input = run_or_exit(
+    build_final_input(imported$parsed_input),
+    "Input Processing Error"
   )
-  
-  if (input_type == "raw_counts") {
-  
-    raw_opts = choose_raw_count_processing_options()
-  
-    final_input = tryCatch(
-      build_gene_score_matrix_from_raw_counts(
-        parsed_raw = parsed_input,
-        meta = meta,
-        aggregation_fun = raw_opts$aggregation_fun,
-        normalize_method = raw_opts$normalize_method,
-        make_z = raw_opts$make_z
+
+  res = run_or_exit(
+    run_mcd_pipeline(
+      final_input = final_input
       ),
-      error = function(e) {
-        show_header("Raw Count Processing Error")
-        cat(conditionMessage(e), "\n")
-        pause("Press Enter to exit...")
-        quit(status = 1)
-      }
-    )
-  
-  } else {
-  
-    final_input = parsed_input
-  
-    final_input$metadata = tryCatch(
-      align_metadata_to_samples(final_input$sample_names, meta),
-      error = function(e) {
-        show_header("Metadata Alignment Error")
-        cat(conditionMessage(e), "\n")
-        pause("Press Enter to exit...")
-        quit(status = 1)
-      }
-    )
-  }
-  
-  show_final_score_matrix_summary(final_input)
-  
+    "MCD Analysis Error"
+  )
+
   out_dir = choose_output_dir(
     prompt_text = "Enter full path to output directory: ",
     caption = "Select output directory",
     create = TRUE
   )
 
-  show_header("Review Analysis Settings")
-  cat("Input type: ", final_input$input_type, "\n\n", sep = "")
-
-  cat("Input path(s): \n")
-  cat(paste0(" - ", input_src$paths), sep = "\n")
-  cat("\n\n")
-
-  cat("Output directory:\n", out_dir, "\n\n", sep = "")
-
-  cat("Samples / conditions:\n")
-  cat(paste0(" - ", final_input$sample_names), sep = "\n")
-  cat("\n")
-
-  if (!ask_yes_no("Proceed with MCD analysis?", default = TRUE)) {
-    cat("Operation cancelled by user.\n")
-    pause("Press Enter to exit...")
-    quit(status = 0)
-  }
-
-  show_header("Running MCD Analysis")
-  # cat("This is where your MCD workflow will run.\n")
-  cat("Rows (genes): ", nrow(final_input$score_matrix), "\n", sep = "")
-  cat("Conditions: ", ncol(final_input$score_matrix), "\n\n", sep = "")
-
-  res = run_mcd_pipeline(
+  out_file <- run_or_exit(save_analysis_outputs(
     final_input = final_input,
-    out_dir = out_dir)
+    res = res,
+    out_dir = out_dir,
+    include_group_sheets = T
+    ), "Output Saving Error"
+  )
   
-  # add excel file
+  cat("Saved output to:", out_file, "\n")
   
-  
-  
-  write.csv(final_input$metadata, file.path(out_dir, "edited_metadata.csv"), row.names = FALSE)
-  write.csv(final_input$score_matrix, file.path(out_dir, "gene_score_matrix.csv"), row.names = TRUE)
-  write.csv(res$out_df, file.path(out_dir, "mcd_res.csv"), row.names = TRUE)
-  
-  
-  # 
-  # show_header("Complete")
-  # cat("Analysis setup completed successfully.\n")
-  # cat("Saved files to:\n")
-  # cat(" - ", file.path(out_dir, "edited_metadata.csv"), "\n", sep = "")
-  # cat(" - ", file.path(out_dir, "gene_score_matrix.csv"), "\n", sep = "")
-  # cat("\n")
-  # 
-  # pause("Press Enter to exit...")
 }
 
 main()
