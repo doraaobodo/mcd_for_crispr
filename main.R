@@ -20,15 +20,17 @@ check_required_packages = function(pkgs) {
   cat("The following packages are required but not installed:\n")
   for (pkg in missing) cat(" - ", pkg, "\n", sep = "")
 
-  cat("\nInstall them in R with:\n")
+  cat("\nInstalling them in R with:\n")
   cat(sprintf(
     'install.packages(c(%s))\n',
     paste(sprintf('"%s"', missing), collapse = ", ")
   ))
   cat("\n")
+  
+  install.packages(missing)
 
-  invisible(read_cli_input("Press [Enter] to exit..."))
-  quit(status = 1)
+  # invisible(read_cli_input("Press [Enter] to exit..."))
+  # quit(status = 1)
 }
 
 ###############################################################################
@@ -158,7 +160,8 @@ choose_output_dir = function(
       return(normalizePath(path, winslash = "/", mustWork = TRUE))
     }
 
-    if (create && ask_yes_no("Directory does not exist. Create it?", default = TRUE)) {
+    if (create && ask_yes_no("Directory does not exist. Create it?", 
+                             default = TRUE)) {
       ok = dir.create(path, recursive = TRUE, showWarnings = FALSE)
       if (ok && dir.exists(path)) {
         return(normalizePath(path, winslash = "/", mustWork = TRUE))
@@ -1022,6 +1025,8 @@ build_final_input = function(parsed_input) {
 # Summaries and output helpers
 ###############################################################################
 
+# source(summary tables R file)
+
 add_value <- function(x, default = NA_character_) {
   if (is.null(x) || length(x) == 0) NA_character_ else as.character(x)
 }
@@ -1029,10 +1034,83 @@ add_value <- function(x, default = NA_character_) {
 add_nrow <- function(x) add_value(if (!is.null(x)) nrow(x) else NULL)
 add_ncol <- function(x) add_value(if (!is.null(x)) ncol(x) else NULL)
 
+
+add_sheet_with_data <- function(wb, sheet_name, x) {
+  header_style <- openxlsx::createStyle(textDecoration = "bold")
+  openxlsx::addWorksheet(wb, sheet_name)
+  openxlsx::writeData(wb, sheet = sheet_name, x = x, withFilter = TRUE)
+  if (nrow(x) > 0 && ncol(x) > 0) {
+    openxlsx::addStyle(
+      wb,
+      sheet = sheet_name,
+      style = header_style,
+      rows = 1,
+      cols = seq_len(ncol(x)),
+      gridExpand = TRUE
+    )
+  }
+  openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
+  openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(x), widths = "auto")
+}
+
+
+add_score_sheet_with_data <- function(wb, sheet_name, x, highlight_cols = NULL) {
+  openxlsx::addWorksheet(wb, sheet_name)
+  openxlsx::writeData(wb, sheet = sheet_name, x = x, withFilter = TRUE)
+  
+  header_style <- openxlsx::createStyle(textDecoration = "bold")
+  pos_style <- openxlsx::createStyle(bgFill = "#F4CCCC")  # light red
+  neg_style <- openxlsx::createStyle(bgFill = "#CFE2F3")  # light blue
+  
+  if (nrow(x) > 0 && ncol(x) > 0) {
+    # Header styling
+    openxlsx::addStyle(
+      wb,
+      sheet = sheet_name,
+      style = header_style,
+      rows = 1,
+      cols = seq_len(ncol(x)),
+      gridExpand = TRUE
+    )
+    
+    # Match only desired columns
+    if (!is.null(highlight_cols)) {
+      cols_to_format <- which(colnames(x) %in% highlight_cols)
+      
+      if (length(cols_to_format) > 0) {
+        # > 0.5 → light red
+        openxlsx::conditionalFormatting(
+          wb,
+          sheet = sheet_name,
+          cols = cols_to_format,
+          rows = 2:(nrow(x) + 1),
+          rule = ">0.5",
+          style = pos_style
+        )
+        
+        # < -0.5 → light blue
+        openxlsx::conditionalFormatting(
+          wb,
+          sheet = sheet_name,
+          cols = cols_to_format,
+          rows = 2:(nrow(x) + 1),
+          rule = "<-0.5",
+          style = neg_style
+        )
+      }
+    }
+  }
+  
+  openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
+  openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(x), widths = "auto")
+}
+
 save_analysis_outputs <- function(final_input,
                                   res,
                                   out_dir = ".",
                                   file_name = "mcd_analysis_results.xlsx",
+                                  alpha = 0.05,
+                                  top_n = 25,
                                   include_group_sheets = FALSE,
                                   overwrite = TRUE) {
  
@@ -1102,36 +1180,82 @@ save_analysis_outputs <- function(final_input,
     )
   }
   
+  score_cols = as.vector(sapply(res$contrast_matrices, colnames))
+  
+  #-----------------------------
+  # Add plotting tables (functions defined in run_mcd.R)
+  #-----------------------------
+  
+  outlier_summary_tbl <- build_outlier_summary_table(res, alpha = 0.05, top_n = 25)
+  
+  #-----------------------------
+  # Create results dictionary
+  #-----------------------------
+  
+  base_dict <- data.frame(
+    sheet_name = "mcd_summary",
+    column_name = setdiff(colnames(outlier_summary_tbl), score_cols),
+    description = c(
+      "Gene symbol.",
+      "Mahalanobis distance summarizing multivariate deviation from center across contrasts within the group. \n Larger distance indicate more extreme outliers.",
+      "Rank of the Mahalanobis distance within the group. Smaller ranks indicating more extreme outliers.",
+      "P-value associated with the Mahalanobis distance.",
+      "Logical indicator of whether the gene was flagged as an outlier in the group.",
+      "Dominant sign amongst contrasts. Computed as (# positive contrasts / N) - (# negative contrasts / N).",
+      "Interpretation of dominant_sign: Positive if sign_col > 0.5, Negative if sign_col < -0.5, otherwise Mixed.",
+      "Standard deviation of absolute contrast effects. Smaller values indicate small variation among contrasts",
+      "Interpretation of effect_indication: 'Specific' if effect_indication > 0.5, otherwise 'Global.'",
+      "Group identifier used for mcd outlier analysis.",
+      "Grouping variable names."
+    ),
+    stringsAsFactors = FALSE
+  )
+  
+  contrast_dict <- data.frame(
+    sheet_name = "mcd_summary",
+    column_name = score_cols,
+    description = paste("Contrast value for", score_cols, " \nRed (+) indicates resistant effect; Blue (-) indicates sensitivity effect."),
+    stringsAsFactors = FALSE
+  )
+  
+  results_dictionary <- rbind(contrast_dict,base_dict)
+  
+  
   #-----------------------------
   # Create workbook
   #-----------------------------
+  
   wb <- openxlsx::createWorkbook()
   
-  header_style <- openxlsx::createStyle(
-    textDecoration = "bold"
+  #-----------------------------
+  # Add DBSCAN Clusters
+  #-----------------------------
+
+  db_res <- run_outlier_hdbscan(
+    outlier_summary_tbl = outlier_summary_tbl,
+    contrast_cols = score_cols,
+    alpha = 0.05,
+    minPts = 10
   )
   
-  add_sheet_with_data <- function(wb, sheet_name, x) {
-    openxlsx::addWorksheet(wb, sheet_name)
-    openxlsx::writeData(wb, sheet = sheet_name, x = x, withFilter = TRUE)
-    if (nrow(x) > 0 && ncol(x) > 0) {
-      openxlsx::addStyle(
-        wb,
-        sheet = sheet_name,
-        style = header_style,
-        rows = 1,
-        cols = seq_len(ncol(x)),
-        gridExpand = TRUE
-      )
-    }
-    openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
-    openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(x), widths = "auto")
+  #-----------------------------
+  # Save plotting outputs
+  #-----------------------------
+  
+  # Add dictionary FIRST
+  add_sheet_with_data(wb, "results_dictionary", results_dictionary)
+  
+  if (!is.null(outlier_summary_tbl)) {
+    add_score_sheet_with_data(wb, "mcd_summary", outlier_summary_tbl, score_cols)
+  }
+  
+  if (!is.null(cluster_tbl)) {
+    add_score_sheet_with_data(wb, "dbscan_clusters", db_res, score_cols)  
   }
   
   #-----------------------------
-  # Main sheets
+  # Raw Outputs
   #-----------------------------
-  add_sheet_with_data(wb, "run_summary", summary_df)
 
   if (!is.null(import_sheet)) {
     add_sheet_with_data(wb, "import_sheet", as.data.frame(import_sheet, stringsAsFactors = FALSE))
@@ -1144,7 +1268,7 @@ save_analysis_outputs <- function(final_input,
   if (!is.null(mcd_tbl)) {
     add_sheet_with_data(wb, "mcd_results", as.data.frame(mcd_tbl, stringsAsFactors = FALSE))
   }
-  
+
   if (!is.null(cw_mcd_tbl)) {
     add_sheet_with_data(wb, "cw_mcd_results", as.data.frame(cw_mcd_tbl, stringsAsFactors = FALSE))
   }
@@ -1189,6 +1313,9 @@ save_analysis_outputs <- function(final_input,
   #-----------------------------
   # Save workbook
   #-----------------------------
+  
+  add_sheet_with_data(wb, "run_summary", summary_df)
+  
   openxlsx::saveWorkbook(wb, out_file, overwrite = overwrite)
   
   invisible(out_file)
@@ -1204,13 +1331,21 @@ save_analysis_outputs <- function(final_input,
 main = function() {
   
   check_required_packages(c("tools", "utils", "robustbase", 
-                            "cellWise", "fdrtool", "openxlsx"))
+                            "cellWise", "fdrtool", "openxlsx",
+                            "ggplot2", "pheatmap", # "ComlpexHeatmap",
+                            "uwot", "Rtsne", "dbscan", "rmarkdown"))
   library(tools)
   library(utils)
   library(robustbase)
-  library(fdrtool)
   library(cellWise)
+  library(fdrtool)
   library(openxlsx)
+  
+  library(ggplot2)
+  library(pheatmap)
+  # library(ComplexHeatmap) # requries bioconductor...
+  library(uwot)
+  library(dbscan)
 
   show_header("CRISPR Drug Screen MCD UI")
   cat("Welcome. ")
@@ -1244,15 +1379,27 @@ main = function() {
     create = TRUE
   )
 
-  out_file <- run_or_exit(save_analysis_outputs(
+    # save workbook
+  # make sure run_mcd.R is sourced first!
+  xlsx_file <- save_analysis_outputs(
     final_input = final_input,
     res = res,
     out_dir = out_dir,
-    include_group_sheets = T
-    ), "Output Saving Error"
+    alpha = 0.05,
+    top_n = 25,
+    include_group_sheets=FALSE
   )
   
-  cat("Saved output to:", out_file, "\n")
+  cat("Saved output to:", xlsx_file, "\n")
+  
+  # # save RDS inputs for report
+  # save_report_inputs(final_input, res, out_dir = out_dir)
+  # 
+  # # write Rmd
+  # write_mcd_report_rmd(
+  #   file = file.path(out_dir, "mcd_report.Rmd"),
+  #   title = "MCD Analysis Report"
+  # )
   
 }
 

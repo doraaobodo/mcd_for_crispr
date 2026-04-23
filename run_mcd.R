@@ -413,9 +413,11 @@ cwMCD=function(X,alpha=0.75,quant=0.99,
 # ============================================================
 
 
+
+
 run_mcd_pipeline <- function(final_input,
                              B = 5) {
-
+  
   if (!(exists("score_matrix", final_input)) |(is.null(final_input$score_matrix))) {
     stop("final_input$score_matrix is missing.")
   }
@@ -426,7 +428,7 @@ run_mcd_pipeline <- function(final_input,
   
   score_matrix <- as.matrix(final_input$score_matrix)
   meta <- as.data.frame(final_input$metadata, stringsAsFactors = FALSE)
-
+  
   if (!is.numeric(score_matrix)) {
     stop("score_matrix must be numeric.")
   }
@@ -587,7 +589,7 @@ run_mcd_pipeline <- function(final_input,
     mcd_res <- mcd_res[, keep_cols, drop = FALSE]
     rownames(mcd_res) <- NULL
     mcd_results_by_group[[group_name]] <- mcd_res
-  
+    
     # run cell mcd
     
     cw_mcd_list <- cwMCD(contrast_matrix)
@@ -608,11 +610,11 @@ run_mcd_pipeline <- function(final_input,
         cw_mcd_res[[col]] <- if (length(vals)) vals[1] else NA_character_
       }
     }
-
+    
     rownames(cw_mcd_res) <- NULL
     cw_mcd_results_by_group[[group_name]] <- list(cw_mcd_res, 
                                                   cw_mcd_list$cw.res.obj)
-  
+    
   }
   
   mcd_combined_results <- do.call(rbind, mcd_results_by_group)
@@ -638,3 +640,282 @@ run_mcd_pipeline <- function(final_input,
 }
 
 # run_mcd_pipeline()
+
+# ============================================================
+# Make MCD Report Tables (run with main.R: )
+# ============================================================
+
+
+get_primary_p_col <- function(tbl, default = NULL) {
+  
+  if(is.null(default)){
+    for (nm in c("p.sim", "p.mdn", "p.chisq", "MCD.pval")) {
+      if (nm %in% colnames(tbl)) return(nm)
+    }
+  } else {
+    if (default %in% colnames(tbl)) return(default)
+  }
+  
+  stop("No supported p-value column found.")
+}
+
+get_gene_effect_summary <- function(contrast_matrix) {
+  
+  sign_mtx = 
+  mean_effect <- rowMeans(contrast_matrix, na.rm = TRUE)
+  sd_abs_effect <- apply(abs(contrast_matrix), 1, sd, na.rm = TRUE)
+
+  
+  # 1) sign_col = (# positive / N) - (# negative / N)
+  sign_col <- apply(contrast_matrix, 1, function(x) {
+    n <- sum(!is.na(x))
+    if (n == 0) return(NA_real_)
+    sum(x > 0, na.rm = TRUE) / n - sum(x < 0, na.rm = TRUE) / n
+  })
+  
+  # 2) Sign_Meaning
+  sign_meaning <- ifelse(
+    is.na(sign_col), NA_character_,
+    ifelse(sign_col > 0.5, "Positive",
+           ifelse(sign_col < -0.5, "Negative", "Mixed"))
+  )
+  
+  # 3) sd_abs_effect
+  # column-standardize absolute values, then compute row SD
+  sd_abs_effect <- apply(abs(contrast_matrix), 1, function(x) sd(x, na.rm=T)/mean(x, na.rm=T))
+  
+  # 4) sd_meaning
+  sd_meaning <- ifelse(
+    is.na(sd_abs_effect), NA_character_,
+    ifelse(sd_abs_effect > 0.5, "Specific", "Global")
+  )
+  
+  # combine into a data.frame if desired
+  data.frame(
+    gene = rownames(contrast_matrix),
+    dominant_sign = sign_col,
+    dominant_sign_meaning = sign_meaning,
+    effect_indication = sd_abs_effect,
+    effect_indication_meaning = sd_meaning,
+    stringsAsFactors = FALSE
+  )
+
+}
+
+build_outlier_summary_table <- function(res, alpha = 0.05, top_n = 25) {
+  out <- lapply(names(res$mcd_results_by_group), function(g) {
+    tbl <- res$mcd_results_by_group[[g]]
+    cm <- res$contrast_matrices[[g]]
+    
+    p_col <- get_primary_p_col(tbl)
+    eff <- get_gene_effect_summary(cm)
+
+    x <- merge(tbl, eff, by = "gene", all.x = TRUE, sort = FALSE)
+    x$p_value_used <- p_col
+    x$p_value <- x[[p_col]]
+    x$outlier_flag <- x$p_value < alpha
+    x$top_gene_flag <- x$outlier_flag | (x$rank_mahalanobis <= top_n)
+    
+    keep_cols <- c(
+      "gene",
+      "mahalanobis",
+      "rank_mahalanobis",
+      "p_value",
+      "outlier_flag",
+      setdiff(colnames(eff), "gene"),
+      intersect(c("group_id", "timepoint", "cell_line", "treatment"), colnames(x))
+    )
+    
+    x[, keep_cols, drop=FALSE]
+  })
+  
+  out.df = do.call(rbind, out)
+  cm.all = do.call(cbind, res$contrast_matrices)
+  cm.all = as.data.frame(cm.all)
+  cm.all$gene = rownames(cm.all)
+  out.df = merge(cm.all, out.df, by = 'gene')
+
+
+}
+
+build_group_cluster_table <- function(group_id,
+                                      res,
+                                      alpha = 0.05,
+                                      eps = 0.5,
+                                      minPts = 10,
+                                      seed = 1) {
+  if (!requireNamespace("uwot", quietly = TRUE)) {
+    stop("Package 'uwot' is required.")
+  }
+  if (!requireNamespace("dbscan", quietly = TRUE)) {
+    stop("Package 'dbscan' is required.")
+  }
+  
+  tbl <- res$mcd_results_by_group[[group_id]]
+  cm <- res$contrast_matrices[[group_id]]
+  
+  p_col <- get_primary_p_col(tbl)
+  
+  pca <- stats::prcomp(cm, center = TRUE, scale. = TRUE)
+  pc_df <- data.frame(
+    gene = rownames(cm),
+    PC1 = pca$x[, 1],
+    PC2 = pca$x[, 2],
+    stringsAsFactors = FALSE
+  )
+  
+  set.seed(seed)
+  um <- uwot::umap(cm, n_neighbors = 15, min_dist = 0.1, verbose = FALSE)
+  um_df <- data.frame(
+    gene = rownames(cm),
+    UMAP1 = um[, 1],
+    UMAP2 = um[, 2],
+    stringsAsFactors = FALSE
+  )
+  
+  cl <- dbscan::dbscan(um, eps = eps, minPts = minPts)
+  cl_df <- data.frame(
+    gene = rownames(cm),
+    cluster_id = cl$cluster,
+    is_noise = cl$cluster == 0,
+    stringsAsFactors = FALSE
+  )
+  
+  out <- Reduce(function(a, b) merge(a, b, by = "gene", all = TRUE, sort = FALSE),
+                list(
+                  tbl[, c(intersect(c("group_id", "timepoint", "cell_line"), colnames(tbl)),
+                          "gene", "mahalanobis", p_col), drop = FALSE],
+                  pc_df,
+                  um_df,
+                  cl_df
+                ))
+  
+  names(out)[names(out) == p_col] <- "p_value"
+  out$outlier_flag <- out$p_value < alpha
+  out$cluster_method <- "UMAP_DBSCAN"
+  out
+}
+
+build_cluster_summary_table <- function(res,
+                                        alpha = 0.05,
+                                        eps = 0.5,
+                                        minPts = 10,
+                                        seed = 1) {
+  out <- lapply(names(res$mcd_results_by_group), function(g) {
+    build_group_cluster_table(
+      group_id = g,
+      res = res,
+      alpha = alpha,
+      eps = eps,
+      minPts = minPts,
+      seed = seed
+    )
+  })
+  do.call(rbind, out)
+}
+
+build_group_summary_table <- function(res,
+                                      alpha = 0.05,
+                                      cluster_tbl = NULL) {
+  out <- lapply(names(res$mcd_results_by_group), function(g) {
+    tbl <- res$mcd_results_by_group[[g]]
+    p_col <- get_primary_p_col(tbl)
+    
+    x <- data.frame(
+      group_id = g,
+      n_genes = nrow(tbl),
+      n_outliers_alpha = sum(tbl[[p_col]] < alpha, na.rm = TRUE),
+      min_p = min(tbl[[p_col]], na.rm = TRUE),
+      median_mahalanobis = stats::median(tbl$mahalanobis, na.rm = TRUE),
+      max_mahalanobis = max(tbl$mahalanobis, na.rm = TRUE),
+      stringsAsFactors = FALSE
+    )
+    
+    grp_cols <- intersect(c("timepoint", "cell_line", "treatment"), colnames(tbl))
+    for (cc in grp_cols) x[[cc]] <- tbl[[cc]][1]
+    
+    if (!is.null(cluster_tbl)) {
+      sub <- cluster_tbl[cluster_tbl$group_id == g, , drop = FALSE]
+      x$n_clusters_dbscan <- length(setdiff(unique(sub$cluster_id), 0))
+      x$n_noise_dbscan <- sum(sub$is_noise, na.rm = TRUE)
+    }
+    
+    x
+  })
+  
+  do.call(rbind, out)
+}
+
+
+run_outlier_hdbscan<- function(outlier_summary_tbl,
+                                         contrast_cols,
+                                         alpha = 0.05,
+                                         minPts = 10,
+                                         scale_rows = FALSE) {
+  if (!requireNamespace("dbscan", quietly = TRUE)) {
+    stop("Package 'dbscan' is required.")
+  }
+  
+  missing_cols <- setdiff(contrast_cols, colnames(outlier_summary_tbl))
+  if (length(missing_cols) > 0) {
+    stop(
+      "Missing contrast columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+  
+  # subset to rows to be clustered
+  keep_idx <- outlier_summary_tbl$outlier_flag | outlier_summary_tbl$p_value < alpha
+  dat_sub <- outlier_summary_tbl[keep_idx, , drop = FALSE]
+  
+  if (nrow(dat_sub) == 0) {
+    return(data.frame())
+  }
+  
+  # helper for optional row scaling
+  row_scale <- function(mat) {
+    t(apply(mat, 1, function(x) {
+      s <- stats::sd(x, na.rm = TRUE)
+      m <- mean(x, na.rm = TRUE)
+      
+      if (is.na(s) || s == 0) {
+        rep(0, length(x))
+      } else {
+        as.numeric((x - m) / s)
+      }
+    }))
+  }
+  
+  split_tbl <- split(dat_sub, dat_sub$group_id)
+  
+  cluster_list <- lapply(split_tbl, function(df_group) {
+    mat <- as.matrix(df_group[, contrast_cols, drop = FALSE])
+    
+    # optional row scaling
+    if (scale_rows) {
+      mat <- row_scale(mat)
+      colnames(mat) <- contrast_cols
+    }
+    
+    # HDBSCAN requires at least minPts rows to form a cluster
+    if (nrow(mat) < minPts) {
+      df_group$hdbscan_cluster <- 0L
+      df_group$hdbscan_is_noise <- TRUE
+      df_group$hdbscan_membership_prob <- NA_real_
+      return(df_group)
+    }
+    
+    hdb <- dbscan::hdbscan(mat, minPts = minPts)
+    
+    df_group$hdbscan_cluster <- hdb$cluster
+    df_group$hdbscan_is_noise <- hdb$cluster == 0L
+    df_group$hdbscan_membership_prob <- hdb$membership_prob
+    
+    df_group
+  })
+  
+  cluster_table <- do.call(rbind, cluster_list)
+  rownames(cluster_table) <- NULL
+  
+  cluster_table
+}
